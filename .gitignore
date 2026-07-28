@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build
+build/
+dist/
+*.egg-info/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# All datasets — download via scripts in training/*/scripts/
+/data/
+data/
+**/data/
+
+# All trained model weights — reproduce via training scripts
+/models/
+models/
+
+# Common ML artifact extensions
+*.h5
+*.pth
+*.pt
+*.pkl
+*.bin
+*.onnx
+*.ckpt
+*.safetensors
+
+# Logs and outputs
+*.log
+logs/
+runs/
+training/**/checkpoints/
+training/**/runs/
+training/**/mnist_data/
+
+# OS
+.DS_Store
+Thumbs.db
+*.Zone.Identifier
