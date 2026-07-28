@@ -5,8 +5,8 @@ End-to-end computer vision pipeline that takes a photograph of a sudoku puzzle a
 ## Quick Start
 
 ```bash
-pip install -e ".[dev]"
-python -m sudoku_solver test_images/sudoku.png
+uv sync
+uv run python -m sudoku_solver test_images/sudoku.png
 ```
 
 ```python
@@ -124,7 +124,7 @@ Model weights are not stored in this repository. Follow the steps below to downl
 ### Prerequisites
 
 ```bash
-pip install -e ".[dev]"
+uv sync
 ```
 
 You will also need a [Roboflow](https://roboflow.com) account and API key to download the datasets.
@@ -161,7 +161,7 @@ project.version(1).download("yolov8", location="data/segmentation/segmentation_d
 #### 2. Train
 
 ```bash
-python training/segmentation/scripts/train_maskrcnn.py \
+uv run python training/segmentation/scripts/train_maskrcnn.py \
     --data_root data/segmentation/segmentation_dataset \
     --num_epochs 10 \
     --batch_size 2 \
@@ -207,7 +207,7 @@ Each download produces `train/`, `valid/`, and `test/` folders, each containing 
 This script reads the COCO annotations, crops each annotated cell from the grid images, and saves them under `data/grid_ocr/cells/{digit}/` using the ground-truth digit label. It also requires access to the already-trained Mask R-CNN (or the rectified grid images directly) to pair bounding boxes with digit values.
 
 ```bash
-python training/grid_ocr/scripts/extract_and_label_cells.py
+uv run python training/grid_ocr/scripts/extract_and_label_cells.py
 ```
 
 After running, the folder structure should be:
@@ -226,7 +226,7 @@ data/grid_ocr/cells/
 The training script combines the real cell crops with a 60,000-image synthetic dataset generated on the fly each epoch.
 
 ```bash
-python training/grid_ocr/scripts/train_cell_classifier.py \
+uv run python training/grid_ocr/scripts/train_cell_classifier.py \
     --epochs 50 \
     --batch_size 128 \
     --lr 1e-3 \
@@ -243,9 +243,9 @@ Expected final metrics: **~98.3% accuracy** on the real cell crop validation set
 ## Testing
 
 ```bash
-pytest tests/ -v
+uv run pytest tests/ -v
 ```
 
 ## Dependencies
 
-Python ≥ 3.10, PyTorch, torchvision, OpenCV, Google OR-Tools, scikit-learn. See `pyproject.toml` for exact versions.
+Python ≥ 3.10, PyTorch, torchvision, OpenCV, Google OR-Tools, scikit-learn. Managed with [uv](https://docs.astral.sh/uv/) — see `pyproject.toml` for the full dependency list.
