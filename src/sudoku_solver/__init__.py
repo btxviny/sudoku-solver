@@ -1,35 +1,16 @@
-"""Sudoku solver - end-to-end computer vision pipeline for solving sudoku from images."""
+"""Sudoku solver — end-to-end computer vision pipeline."""
 
-from .grid_detector import GridDetector
-from .cell_extractor import CellExtractor
-from .digit_classifier import DigitClassifier
-from .sudoku_solver import SudokuSolver
 from .pipeline import SudokuPipeline, PipelineResult
-from .config import (
-    PipelineConfig,
-    GridDetectorConfig,
-    CellExtractorConfig,
-    DigitClassifierConfig,
-    ImageNetConfig,
-    ModelPaths,
-    default_config,
-)
+from .sudoku_solver import SudokuSolver
+from .grid_detector import GridDetector
+from .grid_ocr import GridOCR
+from .config import PipelineConfig
 
 __all__ = [
-    # Pipeline
     "SudokuPipeline",
     "PipelineResult",
-    # Modules
-    "GridDetector",
-    "CellExtractor",
-    "DigitClassifier",
     "SudokuSolver",
-    # Config
+    "GridDetector",
+    "GridOCR",
     "PipelineConfig",
-    "GridDetectorConfig",
-    "CellExtractorConfig",
-    "DigitClassifierConfig",
-    "ImageNetConfig",
-    "ModelPaths",
-    "default_config",
 ]

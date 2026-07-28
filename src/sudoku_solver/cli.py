@@ -1,24 +1,21 @@
 import argparse
 import sys
+from pathlib import Path
 
-from .pipeline import SudokuPipeline, PipelineResult
+from .pipeline import SudokuPipeline
+from .config import PipelineConfig, GridDetectorConfig
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="sudoku-solver",
-        description="End-to-end sudoku solver: detect grid, classify digits, solve puzzle.",
+        description="End-to-end sudoku solver: detect grid, read digits, solve puzzle.",
     )
     parser.add_argument("image", help="Path to sudoku image")
     parser.add_argument(
         "--maskrcnn",
-        default="models/weights/maskrcnn_sudoku_20250912_115605.pth",
-        help="Path to Mask R-CNN weights",
-    )
-    parser.add_argument(
-        "--xgboost",
-        default="models/weights/xgboost_digit_classifier.model",
-        help="Path to XGBoost digit classifier",
+        default=None,
+        help="Path to Mask R-CNN weights (overrides config default)",
     )
     parser.add_argument(
         "--threshold",
@@ -28,16 +25,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    from pathlib import Path
-    from .config import PipelineConfig, GridDetectorConfig, DigitClassifierConfig
-
-    cfg = PipelineConfig(
-        grid_detector=GridDetectorConfig(
+    cfg = PipelineConfig()
+    if args.maskrcnn:
+        cfg.grid_detector = GridDetectorConfig(
             model_path=Path(args.maskrcnn),
             detection_threshold=args.threshold,
-        ),
-        digit_classifier=DigitClassifierConfig(model_path=Path(args.xgboost)),
-    )
+        )
 
     try:
         pipe = SudokuPipeline(cfg)

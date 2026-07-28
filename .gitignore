@@ -53,6 +53,9 @@ training/**/checkpoints/
 training/**/runs/
 training/**/mnist_data/
 
+# Build artifacts
+*.egg-info/
+
 # OS
 .DS_Store
 Thumbs.db

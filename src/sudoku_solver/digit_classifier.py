@@ -16,11 +16,12 @@ class DigitClassifier:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.resnet = self._build_feature_extractor()
         self.model = self._load_xgboost()
+        imagenet = ImageNetConfig()
         self.transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.Resize(self.cfg.image_size),
             transforms.ToTensor(),
-            transforms.Normalize(mean=ImageNetConfig.mean, std=ImageNetConfig.std),
+            transforms.Normalize(mean=imagenet.mean, std=imagenet.std),
         ])
 
     def _build_feature_extractor(self) -> nn.Module:
