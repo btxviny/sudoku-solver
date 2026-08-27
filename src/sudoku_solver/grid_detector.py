@@ -21,9 +21,13 @@ class GridDetector:
          pairs, giving a true quadrilateral warp even for perspective-distorted grids.
     """
 
-    def __init__(self, config: GridDetectorConfig | None = None):
+    def __init__(self, config: GridDetectorConfig | None = None, device: str | None = None):
         self.cfg = config or GridDetectorConfig()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(
+            device or ("cuda" if torch.cuda.is_available() else "cpu")
+        )
+        if not self.cfg.model_path.exists():
+            raise FileNotFoundError(f"Mask R-CNN weights not found: {self.cfg.model_path}")
         self.model = self._build_and_load_model()
         self.model.eval()
 
@@ -39,18 +43,10 @@ class GridDetector:
         model.to(self.device)
         return model
 
-    def detect(self, image: np.ndarray) -> np.ndarray:
-        """Detect sudoku grid and return perspective-corrected crop.
-
-        Args:
-            image: RGB image (H, W, 3), uint8.
-
-        Returns:
-            Rectified square grid image of size (output_size, output_size, 3).
-        """
+    def _run(self, image: np.ndarray):
+        """Run full detection; return (rectified, resized, mask_np, corners)."""
         resized = cv2.resize(image, self.cfg.resize_to)
 
-        # --- Step 1: Mask R-CNN → approximate grid mask ---
         img_tensor = transforms.ToTensor()(resized).to(self.device)
         with torch.no_grad():
             outputs = self.model([img_tensor])
@@ -65,18 +61,63 @@ class GridDetector:
             combined = torch.max(combined, (m[0] > 0.5).byte())
         mask_np = (combined.cpu().numpy() * 255).astype(np.uint8)
 
-        # --- Step 2: Hough line detection → true corner intersections ---
         corners = self._corners_from_hough(resized, mask_np)
-
         if corners is None:
-            # Fallback: approximate polygon from mask contour
             contours, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if not contours:
                 raise RuntimeError("No contour found from detection mask.")
             contour = max(contours, key=cv2.contourArea)
             corners = self._find_quad(contour)
 
-        return self._perspective_warp(resized, corners, size=self.cfg.output_size)
+        rectified = self._perspective_warp(resized, corners, size=self.cfg.output_size)
+        return rectified, resized, mask_np, corners
+
+    def detect(self, image: np.ndarray) -> np.ndarray:
+        """Detect sudoku grid and return perspective-corrected crop.
+
+        Args:
+            image: RGB image (H, W, 3), uint8.
+
+        Returns:
+            Rectified square grid image of size (output_size, output_size, 3).
+        """
+        rectified, _, _, _ = self._run(image)
+        return rectified
+
+    def detect_debug(self, image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Like detect() but also returns a segmentation overlay for visualization.
+
+        Returns:
+            (rectified, seg_overlay) — rectified grid and the mask+corner
+            overlay drawn on the resized source image.
+        """
+        rectified, resized, mask_np, corners = self._run(image)
+        seg = self._seg_overlay(resized, mask_np, corners)
+        return rectified, seg
+
+    @staticmethod
+    def _seg_overlay(
+        image: np.ndarray, mask: np.ndarray, corners: np.ndarray
+    ) -> np.ndarray:
+        """Draw the MaskRCNN segmentation mask and corner quadrilateral on image."""
+        vis = image.astype(np.float32)
+
+        # Teal tint over masked region
+        teal = np.zeros_like(vis)
+        teal[mask > 0] = [30, 215, 160]
+        alpha = np.where(mask[:, :, None] > 0, 0.35, 0.0)
+        vis = (vis * (1 - alpha) + teal * alpha).clip(0, 255).astype(np.uint8)
+
+        # Quadrilateral border
+        pts = corners.astype(np.int32).reshape((-1, 1, 2))
+        cv2.polylines(vis, [pts], True, (30, 220, 130), 3, cv2.LINE_AA)
+
+        # Corner markers: white ring + green fill
+        for pt in corners.astype(np.int32):
+            cv2.circle(vis, tuple(pt), 9, (255, 255, 255), -1, cv2.LINE_AA)
+            cv2.circle(vis, tuple(pt), 6, (20, 160, 80), -1, cv2.LINE_AA)
+
+        return vis
 
     # ------------------------------------------------------------------
     # Hough-based corner detection

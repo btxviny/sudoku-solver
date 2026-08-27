@@ -1,0 +1,726 @@
+{
+  "total": 125,
+  "counts": {
+    "ok": 6,
+    "detection_failure": 0,
+    "ocr_failure": 0,
+    "invalid_clues": 119,
+    "solve_failure": 0
+  },
+  "failures": [
+    {
+      "image": "image103_jpg.rf.62f7f6b9e0c591f37ecb04d7c7ecff2b.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "24 cells in conflict"
+    },
+    {
+      "image": "image103_jpg.rf.87c0598fde3026b82645f450717c3aec.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 27,
+      "error": "22 cells in conflict"
+    },
+    {
+      "image": "image103_jpg.rf.f83335ffa5088869e73f7310b56f98ee.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "22 cells in conflict"
+    },
+    {
+      "image": "image109_jpg.rf.1415e546ae06afd3d44b834652b4968f.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 27,
+      "error": "17 cells in conflict"
+    },
+    {
+      "image": "image109_jpg.rf.183a2ea8284c1552898919f3674a770b.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 28,
+      "error": "21 cells in conflict"
+    },
+    {
+      "image": "image109_jpg.rf.6fca25030ca66320798824a5a794551f.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 27,
+      "error": "20 cells in conflict"
+    },
+    {
+      "image": "image10_jpg.rf.4fa3032cfad74e18a5344af93afe9864.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 28,
+      "error": "15 cells in conflict"
+    },
+    {
+      "image": "image10_jpg.rf.67d9802b2f7a17c213ce513cc9ccd358.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 49,
+      "error": "40 cells in conflict"
+    },
+    {
+      "image": "image10_jpg.rf.b38529c5e3021ebbdd57ca43892884a8.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 48,
+      "error": "37 cells in conflict"
+    },
+    {
+      "image": "image119_jpg.rf.5ac0e7a3f1f56cda10615d614c31a6a6.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 21,
+      "error": "8 cells in conflict"
+    },
+    {
+      "image": "image119_jpg.rf.a6e5c7bfb25d923a6c44a51c08851f2a.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "image119_jpg.rf.ddb37a8b436f852ba83969b9f6ce5582.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "6 cells in conflict"
+    },
+    {
+      "image": "image125_jpg.rf.82c1cae0b7b28c2284bf406cb07bd613.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 25,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "image125_jpg.rf.d29dafa33136c8c4eac369c96029176c.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 24,
+      "error": "19 cells in conflict"
+    },
+    {
+      "image": "image125_jpg.rf.e57626b5feb7a0703207fe8bf78541df.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "17 cells in conflict"
+    },
+    {
+      "image": "image13_jpg.rf.0bef1394d13b70db36357e3b5a62161d.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "12 cells in conflict"
+    },
+    {
+      "image": "image13_jpg.rf.c509f11ee86e11782a37d5b13a0300a7.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "23 cells in conflict"
+    },
+    {
+      "image": "image13_jpg.rf.ec2297768fd9d38d43625e307c532fe0.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "image151_jpg.rf.9c2a54491c1b5cfdca02dc3fa352d011.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 34,
+      "error": "6 cells in conflict"
+    },
+    {
+      "image": "image151_jpg.rf.d950fdc36af13ad5dbb0e6416fecb3f5.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 34,
+      "error": "6 cells in conflict"
+    },
+    {
+      "image": "image151_jpg.rf.dcfd7023e01682ccc08bb07094b381e3.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 34,
+      "error": "6 cells in conflict"
+    },
+    {
+      "image": "image157_jpg.rf.7468a001427f0d12375b320b2f7f03dd.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 32,
+      "error": "7 cells in conflict"
+    },
+    {
+      "image": "image157_jpg.rf.e9ea2816166ae1ab3ecce77bc42fda62.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 32,
+      "error": "3 cells in conflict"
+    },
+    {
+      "image": "image157_jpg.rf.f2b33d26d5d1db3a5a0f2d34212bb705.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 32,
+      "error": "5 cells in conflict"
+    },
+    {
+      "image": "image165_jpg.rf.1934afdc83a3096955fe7a9abee34233.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "2 cells in conflict"
+    },
+    {
+      "image": "image165_jpg.rf.1e5c790e5658dacc9ba4fd405676c801.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "4 cells in conflict"
+    },
+    {
+      "image": "image165_jpg.rf.bc701c2311405bdd4e00db5fa2a671f9.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "4 cells in conflict"
+    },
+    {
+      "image": "image178_jpg.rf.6fb4577e3f4bcc605cf2e6f851dc1db0.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 29,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "image178_jpg.rf.807753bb072aac824d08e0d12f1ac661.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 28,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "image178_jpg.rf.bcc0d860aeb0954a1ac2e4f80609a579.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 28,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "image17_jpg.rf.7e1d8f3bf42d66eac848b5f48d057d45.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "image17_jpg.rf.b17f5ad5a6490d0a80d118809a91a311.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 25,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "image17_jpg.rf.dea73246fbed19b53ed3e04612c95453.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 27,
+      "error": "16 cells in conflict"
+    },
+    {
+      "image": "image183_jpg.rf.2d745f8bf6b33deba456e17956eff08e.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "6 cells in conflict"
+    },
+    {
+      "image": "image183_jpg.rf.422486a316f7480e341202d4e6926f31.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "12 cells in conflict"
+    },
+    {
+      "image": "image183_jpg.rf.8b25d98f73c9c2547f98daee00b1ca28.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "6 cells in conflict"
+    },
+    {
+      "image": "image186_jpg.rf.0fb32bcc224d4afa54980ccd979c589e.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 32,
+      "error": "23 cells in conflict"
+    },
+    {
+      "image": "image186_jpg.rf.127051e10d2b2f792d66f02ccdb63190.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 33,
+      "error": "15 cells in conflict"
+    },
+    {
+      "image": "image186_jpg.rf.316d97353128fb43aa896bd5ba747372.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 33,
+      "error": "15 cells in conflict"
+    },
+    {
+      "image": "image191_jpg.rf.323af3059eaaaa0cf512bde6b112870a.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "12 cells in conflict"
+    },
+    {
+      "image": "image191_jpg.rf.af45f4635d24747f0c62def13cf4ef97.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 28,
+      "error": "8 cells in conflict"
+    },
+    {
+      "image": "image191_jpg.rf.bc0d0da6ca9817c64a62e56b8f2c7bb8.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 27,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "image19_jpg.rf.130ef439725bacde6f527132c147e1dd.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 25,
+      "error": "19 cells in conflict"
+    },
+    {
+      "image": "image19_jpg.rf.84c2cdaf48980469649307c3967836e2.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 37,
+      "error": "31 cells in conflict"
+    },
+    {
+      "image": "image19_jpg.rf.d17c73cd5943de1d375f2106cec2c6f5.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 31,
+      "error": "24 cells in conflict"
+    },
+    {
+      "image": "image201_jpg.rf.2d07fb0a2ebcad0738af29551042efc3.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 22,
+      "error": "8 cells in conflict"
+    },
+    {
+      "image": "image201_jpg.rf.9aa78a550ffbf0f39a4bf1269c0272d8.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 31,
+      "error": "25 cells in conflict"
+    },
+    {
+      "image": "image201_jpg.rf.b98802549989a3f3ab3ebfbf740f29bb.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 22,
+      "error": "8 cells in conflict"
+    },
+    {
+      "image": "image203_jpg.rf.3b5ced410f9f38aa1d312fdc7095e203.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 46,
+      "error": "37 cells in conflict"
+    },
+    {
+      "image": "image203_jpg.rf.52d37178305422ad5d84fe6a96c5882f.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 41,
+      "error": "36 cells in conflict"
+    },
+    {
+      "image": "image203_jpg.rf.da9f7698fccd13de341443e28f77f216.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 44,
+      "error": "39 cells in conflict"
+    },
+    {
+      "image": "image204_jpg.rf.014e7a742e1dcfa544b013e663adaec8.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 45,
+      "error": "35 cells in conflict"
+    },
+    {
+      "image": "image204_jpg.rf.c81103e0f3f363658985eac3a18dd133.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 44,
+      "error": "35 cells in conflict"
+    },
+    {
+      "image": "image204_jpg.rf.dccd2b764d475f7f86a8698ef06d2e7a.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 43,
+      "error": "36 cells in conflict"
+    },
+    {
+      "image": "image206_jpg.rf.098c8bb2ed12535ebdfbef2bd8a9a4ea.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 40,
+      "error": "35 cells in conflict"
+    },
+    {
+      "image": "image206_jpg.rf.0aeed3e20cacfbce890549b2a5c9786f.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 8,
+      "error": "8 cells in conflict"
+    },
+    {
+      "image": "image206_jpg.rf.fa853938228c3d916e478df5121999cf.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 32,
+      "error": "27 cells in conflict"
+    },
+    {
+      "image": "image28_jpg.rf.1b8153a66a0f34987519994a1a5d36da.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 16,
+      "error": "8 cells in conflict"
+    },
+    {
+      "image": "image28_jpg.rf.a2c11b34d2ffa200fb65a2ca23928310.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 15,
+      "error": "15 cells in conflict"
+    },
+    {
+      "image": "image28_jpg.rf.ef8105f1ba82d828e5cfe8c08ebcac56.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 35,
+      "error": "34 cells in conflict"
+    },
+    {
+      "image": "image2_jpg.rf.264141e131b9db51e85d768a43165e6e.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "5 cells in conflict"
+    },
+    {
+      "image": "image2_jpg.rf.9687cf76698fafd7160539e8f38f3100.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "6 cells in conflict"
+    },
+    {
+      "image": "image2_jpg.rf.bd451371b63f70d0bf0d0a8531223911.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "8 cells in conflict"
+    },
+    {
+      "image": "image40_jpg.rf.04c4bda30606b83cdcefa63efdcd11d1.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 22,
+      "error": "10 cells in conflict"
+    },
+    {
+      "image": "image40_jpg.rf.48c4415d3aabcb5b09f0d29fa8947291.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 20,
+      "error": "15 cells in conflict"
+    },
+    {
+      "image": "image40_jpg.rf.93fe07457ab266e0d0273dfbc50965fd.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 23,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "image65_jpg.rf.52447769996c562bff1bbd06009d7add.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 29,
+      "error": "19 cells in conflict"
+    },
+    {
+      "image": "image65_jpg.rf.99eec51c758aab2b3454de6add4aeeb6.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "17 cells in conflict"
+    },
+    {
+      "image": "image65_jpg.rf.b741d8431a7e26bfb06997aca01c8e8c.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 29,
+      "error": "18 cells in conflict"
+    },
+    {
+      "image": "image73_jpg.rf.245ed6fd5b466a359927844a0bdc327a.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "12 cells in conflict"
+    },
+    {
+      "image": "image73_jpg.rf.7848563a46db2af114a1f65f575beb7d.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 25,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "image73_jpg.rf.f2c7b31b35d8f8c02e549c2cf21d5f48.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "image77_jpg.rf.30937fafa3c5cc213986323d8fdbac7d.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "image77_jpg.rf.7dcb08fda82b36941e98c139b7b7133d.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "10 cells in conflict"
+    },
+    {
+      "image": "image77_jpg.rf.e6f75a18b1f8eb495670867da7817cd1.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "18 cells in conflict"
+    },
+    {
+      "image": "image9_jpg.rf.5350d2ea4ea1cdb75e223666006072a9.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 35,
+      "error": "29 cells in conflict"
+    },
+    {
+      "image": "image9_jpg.rf.dfa9306034cc3e17654f9f045d0db8db.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 31,
+      "error": "27 cells in conflict"
+    },
+    {
+      "image": "image9_jpg.rf.e12382c74225d9ad051c0e6b83fa5a77.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "2 cells in conflict"
+    },
+    {
+      "image": "sudoku_1001_jpg.rf.10d27fa59087d6ffcd1820fb920709f4.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 24,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "sudoku_1001_jpg.rf.95794dc8bd3c34741a8cea234f9decfb.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "17 cells in conflict"
+    },
+    {
+      "image": "sudoku_1001_jpg.rf.ea9720a187781305f6c051189b962d65.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 23,
+      "error": "16 cells in conflict"
+    },
+    {
+      "image": "sudoku_1003_jpg.rf.159c6b1f86352ac935e5f0f3f790e413.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 31,
+      "error": "27 cells in conflict"
+    },
+    {
+      "image": "sudoku_1003_jpg.rf.4e8052c9ea777465c9e4afbfb8f3a579.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 33,
+      "error": "27 cells in conflict"
+    },
+    {
+      "image": "sudoku_1003_jpg.rf.52241f2ab71761c511c76d68b8ac9272.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 32,
+      "error": "24 cells in conflict"
+    },
+    {
+      "image": "sudoku_1006_jpg.rf.1c464f0d9e2f10ea0a122b58d5dd4ac5.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 33,
+      "error": "24 cells in conflict"
+    },
+    {
+      "image": "sudoku_1006_jpg.rf.44f6945399a705fe0c2a1ee732ac2394.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "18 cells in conflict"
+    },
+    {
+      "image": "sudoku_1006_jpg.rf.851afafe7020ebcc8d93cf1edd15806e.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 31,
+      "error": "19 cells in conflict"
+    },
+    {
+      "image": "sudoku_3230_jpg.rf.2b86e0b6aa2a1cf0cf0085d3cf314270.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 22,
+      "error": "11 cells in conflict"
+    },
+    {
+      "image": "sudoku_3230_jpg.rf.2de29af5e44860027287e7d8438bd3de.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 24,
+      "error": "10 cells in conflict"
+    },
+    {
+      "image": "sudoku_3230_jpg.rf.2df5c2939a7bb9c380a278796fd37ddb.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 23,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "sudoku_3231_jpg.rf.09169833731abe6c780e1392eedb3fc5.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 27,
+      "error": "12 cells in conflict"
+    },
+    {
+      "image": "sudoku_3231_jpg.rf.2f926a0f95f7fe4978d6a0b8f7234288.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 28,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "sudoku_3231_jpg.rf.383138fea5461901c8d8c04399394406.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 27,
+      "error": "15 cells in conflict"
+    },
+    {
+      "image": "sudoku_3268_jpg.rf.37731a3129a6798b9bc7d1e09a4f8d4b.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 21,
+      "error": "9 cells in conflict"
+    },
+    {
+      "image": "sudoku_3268_jpg.rf.a1aa1f6cd7bf1153c1ba5fdeebb92a29.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 27,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "sudoku_3268_jpg.rf.ab93af481240869f8e6853f93956d811.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "12 cells in conflict"
+    },
+    {
+      "image": "sudoku_3303_jpg.rf.2ecb8ecc134f15d3959ce1ce038b2fa5.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 20,
+      "error": "15 cells in conflict"
+    },
+    {
+      "image": "sudoku_3303_jpg.rf.cbb6b7914596fe8650214029399e3b92.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 20,
+      "error": "15 cells in conflict"
+    },
+    {
+      "image": "sudoku_3303_jpg.rf.f0df740ab1c312b39e1ae026bb6492de.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 19,
+      "error": "15 cells in conflict"
+    },
+    {
+      "image": "sudoku_3305_jpg.rf.3937a9b04ee08e328bf26af6a37e6a55.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 22,
+      "error": "18 cells in conflict"
+    },
+    {
+      "image": "sudoku_3305_jpg.rf.5ba9dc85b301fb1f2e6ac148772d12e3.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 17,
+      "error": "15 cells in conflict"
+    },
+    {
+      "image": "sudoku_3305_jpg.rf.f35d67ff0a8bddb2cbb57d4f654ad31a.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 18,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "sudoku_3306_jpg.rf.04b5c0e848dece51cc7da6dc0b07bc03.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 12,
+      "error": "4 cells in conflict"
+    },
+    {
+      "image": "sudoku_3306_jpg.rf.05ad32efa321a3735d14377f403031a0.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 12,
+      "error": "2 cells in conflict"
+    },
+    {
+      "image": "sudoku_3306_jpg.rf.70544d5543074801095b25bd231e2f4c.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 11,
+      "error": "2 cells in conflict"
+    },
+    {
+      "image": "sudoku_3307_jpg.rf.02d5f4d4e7a8c7b377eb1abd1472747f.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 26,
+      "error": "22 cells in conflict"
+    },
+    {
+      "image": "sudoku_3307_jpg.rf.a2d79514258b94722f687fdbfa50933c.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "29 cells in conflict"
+    },
+    {
+      "image": "sudoku_3307_jpg.rf.d45d03934291c18b8355cd11b39b5d81.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 24,
+      "error": "21 cells in conflict"
+    },
+    {
+      "image": "sudoku_3312_jpg.rf.4f7e75da84eae47754f1e60a23ed8f83.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 17,
+      "error": "11 cells in conflict"
+    },
+    {
+      "image": "sudoku_3312_jpg.rf.6041f715de563eb8d21a9fb717e6a9bb.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 18,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "sudoku_3312_jpg.rf.ef6d5cb009934b67db6bf108850f0bd2.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 13,
+      "error": "11 cells in conflict"
+    },
+    {
+      "image": "sudoku_33_jpg.rf.6633d7fd9b5e4374be8698f1f080efe6.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "sudoku_33_jpg.rf.8636a5bb5a6297fe912ceaaa49e12b97.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "14 cells in conflict"
+    },
+    {
+      "image": "sudoku_33_jpg.rf.a95b0e7e59c23f35aceafb54a0cfe12d.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 30,
+      "error": "13 cells in conflict"
+    },
+    {
+      "image": "sudoku_42_jpg.rf.5587e2b719414eca5c43fa14155d340f.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 25,
+      "error": "11 cells in conflict"
+    },
+    {
+      "image": "sudoku_42_jpg.rf.c8b46a33171ec02fe81b03914ae0374c.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 23,
+      "error": "6 cells in conflict"
+    },
+    {
+      "image": "sudoku_43_jpg.rf.85624c32eacbb5632a75d8d1201f469f.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 25,
+      "error": "12 cells in conflict"
+    },
+    {
+      "image": "sudoku_43_jpg.rf.974dcaaf2e60fe01caca95a3e922b124.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 25,
+      "error": "16 cells in conflict"
+    },
+    {
+      "image": "sudoku_43_jpg.rf.d2afc3f3f330d74960031114edc3c347.jpg",
+      "stage": "invalid_clues",
+      "n_clues": 24,
+      "error": "16 cells in conflict"
+    }
+  ]
+}

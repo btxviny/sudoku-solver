@@ -10,10 +10,12 @@ from .config import DigitClassifierConfig, ImageNetConfig, CellExtractorConfig
 class DigitClassifier:
     """Classify digits in preprocessed sudoku cells via ResNet18 features + XGBoost."""
 
-    def __init__(self, config: DigitClassifierConfig | None = None):
+    def __init__(self, config: DigitClassifierConfig | None = None, device: str | None = None):
         self.cfg = config or DigitClassifierConfig()
         self.cell_cfg = CellExtractorConfig()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(
+            device or ("cuda" if torch.cuda.is_available() else "cpu")
+        )
         self.resnet = self._build_feature_extractor()
         self.model = self._load_xgboost()
         imagenet = ImageNetConfig()
@@ -32,8 +34,12 @@ class DigitClassifier:
         return net
 
     def _load_xgboost(self) -> xgb.XGBClassifier:
+        if not self.cfg.model_path.exists():
+            raise FileNotFoundError(
+                f"XGBoost digit classifier not found: {self.cfg.model_path}"
+            )
         clf = xgb.XGBClassifier()
-        clf.load_model(self.cfg.model_path)
+        clf.load_model(str(self.cfg.model_path))
         return clf
 
     def classify(self, cell: np.ndarray) -> tuple[int, float, bool]:
