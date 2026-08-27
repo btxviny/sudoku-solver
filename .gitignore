@@ -1,3 +1,7 @@
+# Secrets
+.env
+.env.*
+
 # Python
 __pycache__/
 *.py[cod]
@@ -30,6 +34,14 @@ dist/
 /data/
 data/
 **/data/
+
+*.png
+*.jpg
+*.jpeg
+
+*.txt
+*.cache
+
 
 # All trained model weights — reproduce via training scripts
 /models/

@@ -55,9 +55,11 @@ class GridOCR:
     implicitly by the trained CNN — no manual preprocessing required.
     """
 
-    def __init__(self, config: "GridOCRConfig | None" = None):
+    def __init__(self, config: "GridOCRConfig | None" = None, device: str | None = None):
         self.cfg = config or GridOCRConfig()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(
+            device or ("cuda" if torch.cuda.is_available() else "cpu")
+        )
         self.model = self._load()
         self.model.eval()
 

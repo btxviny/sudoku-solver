@@ -1,0 +1,13 @@
+names:
+- empty
+- filled
+nc: 2
+roboflow:
+  license: CC BY 4.0
+  project: sudoku-cell-vision
+  url: https://universe.roboflow.com/pete-mksb1/sudoku-cell-vision/dataset/6
+  version: 6
+  workspace: pete-mksb1
+test: ../test/images
+train: ../train/images
+val: ../valid/images

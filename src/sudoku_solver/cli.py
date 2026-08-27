@@ -2,7 +2,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .pipeline import SudokuPipeline
+from .pipeline import SudokuPipeline, PIPELINE_PATHS
 from .config import PipelineConfig, GridDetectorConfig
 
 
@@ -11,7 +11,9 @@ def main(argv: list[str] | None = None) -> int:
         prog="sudoku-solver",
         description="End-to-end sudoku solver: detect grid, read digits, solve puzzle.",
     )
-    parser.add_argument("image", help="Path to sudoku image")
+    parser.add_argument(
+        "image", nargs="?", help="Path to sudoku image (omit with --list-paths)"
+    )
     parser.add_argument(
         "--maskrcnn",
         default=None,
@@ -23,9 +25,28 @@ def main(argv: list[str] | None = None) -> int:
         default=0.5,
         help="Grid detection confidence threshold",
     )
+    parser.add_argument(
+        "--path",
+        choices=[p.key for p in PIPELINE_PATHS],
+        default=None,
+        help="Model combination to use (default: best available)",
+    )
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cuda", "cpu"],
+        default="auto",
+        help="Inference device (default: auto)",
+    )
+    parser.add_argument(
+        "--list-paths",
+        action="store_true",
+        help="List model combinations and whether their weights are present",
+    )
     args = parser.parse_args(argv)
+    if args.image is None and not args.list_paths:
+        parser.error("the following arguments are required: image")
 
-    cfg = PipelineConfig()
+    cfg = PipelineConfig(device=args.device)
     if args.maskrcnn:
         cfg.grid_detector = GridDetectorConfig(
             model_path=Path(args.maskrcnn),
@@ -34,7 +55,35 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         pipe = SudokuPipeline(cfg)
-        result = pipe.run(args.image)
+
+        if args.list_paths:
+            for p in PIPELINE_PATHS:
+                mark = "available" if pipe.path_available(p) else "missing weights"
+                print(f"{p.key:26} [{mark}]  {p.label}")
+            return 0
+
+        available = pipe.available_paths()
+        if not available:
+            print("No pipeline path is available — check model weights.", file=sys.stderr)
+            return 2
+
+        if args.path:
+            path = next(p for p in PIPELINE_PATHS if p.key == args.path)
+            if not pipe.path_available(path):
+                print(
+                    f"Path '{path.key}' is missing weights. {path.hint}",
+                    file=sys.stderr,
+                )
+                return 2
+        else:
+            path = available[0]
+
+        print(f"Path: {path.label}")
+        result = pipe.run_path(args.image, path)
+        if result.errors:
+            for stage, msg in result.errors.items():
+                print(f"Error ({stage}): {msg}", file=sys.stderr)
+            return 2
         SudokuPipeline.print_result(result)
         return 0
     except FileNotFoundError as e:
