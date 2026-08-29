@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 from sudoku_solver.sudoku_solver import SudokuSolver
-from sudoku_solver.cell_extractor import CellExtractor
 
 
 class TestSudokuSolver:
@@ -44,18 +43,3 @@ class TestSudokuSolver:
         bad = np.zeros((5, 5), dtype=np.uint8)
         with pytest.raises(ValueError, match="Expected 9x9"):
             solver.solve(bad)
-
-
-class TestCellExtractor:
-    def test_extract_81_cells(self):
-        extractor = CellExtractor()
-        fake_grid = np.random.randint(0, 255, (450, 450, 3), dtype=np.uint8)
-        cells = extractor.extract(fake_grid, raw=True)
-        assert len(cells) == 81
-
-    def test_preprocessed_cells_size(self):
-        extractor = CellExtractor()
-        fake_grid = np.random.randint(0, 255, (450, 450, 3), dtype=np.uint8)
-        cells = extractor.extract(fake_grid, raw=False)
-        assert len(cells) == 81
-        assert cells[0].shape == (28, 28, 3)

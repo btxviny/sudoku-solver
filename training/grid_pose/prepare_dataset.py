@@ -1,0 +1,156 @@
+"""Convert the Roboflow segmentation dataset into YOLOv8-pose format.
+
+The `sudoku-lq9gj` labels are already 4-point polygons -- one quadrilateral per
+image tracing the grid border -- so no relabeling is needed, only a change of
+encoding:
+
+    seg :  0  x1 y1 x2 y2 x3 y3 x4 y4                    (normalised polygon)
+    pose:  0  cx cy w h  x1 y1 2  x2 y2 2  x3 y3 2  x4 y4 2
+
+The bounding box is the polygon's extent; the four keypoints are its corners.
+
+Corner order is canonicalised to **TL, TR, BR, BL** -- the same order
+`GridDetector._perspective_warp` expects -- so a pose prediction can be fed
+straight into the existing homography code with no reordering.
+
+Ordering uses an angular sort about the centroid (which fixes the winding)
+followed by a rotation that puts the min-(x+y) corner first.  That agrees with
+the pipeline's sum/diff rule on near-axis-aligned grids but, unlike sum/diff,
+stays consistent on strongly rotated ones where two corners can share an
+extremum.
+
+Usage:
+    uv run python training/grid_pose/prepare_dataset.py
+"""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "data/segmentation/segmentation_dataset"
+DST = ROOT / "data/segmentation/pose_dataset"
+SPLITS = ("train", "valid", "test")
+
+# Minimum quad area as a fraction of the image; below this the annotation is
+# degenerate, not a small grid (the smallest genuine grid covers ~13%).
+MIN_AREA = 0.01
+
+
+def order_corners(pts: np.ndarray) -> np.ndarray:
+    """Order 4 points as TL, TR, BR, BL (clockwise in image coordinates)."""
+    c = pts.mean(axis=0)
+    # atan2 with +y downward makes increasing angle run clockwise on screen.
+    ang = np.arctan2(pts[:, 1] - c[1], pts[:, 0] - c[0])
+    pts = pts[np.argsort(ang)]
+    start = int(np.argmin(pts.sum(axis=1)))   # top-left = smallest x+y
+    return np.roll(pts, -start, axis=0)
+
+
+def convert_label(text: str) -> str | None:
+    """One seg label file -> one pose label file. None if unusable."""
+    lines = [ln for ln in text.strip().splitlines() if ln.strip()]
+    if not lines:
+        return None
+
+    out = []
+    for ln in lines:
+        parts = ln.split()
+        coords = np.array(parts[1:], dtype=np.float64)
+        if coords.size < 8 or coords.size % 2:
+            continue
+        poly = coords.reshape(-1, 2)
+
+        if poly.shape[0] != 4:
+            # Defensive: the dataset is all quads, but a denser polygon would
+            # still yield 4 corners via its min-area rectangle.
+            import cv2
+            box = cv2.boxPoints(cv2.minAreaRect(poly.astype(np.float32)))
+            poly = box.astype(np.float64)
+
+        quad = order_corners(poly).clip(0.0, 1.0)
+
+        # Two source labels are sub-pixel degenerate annotations rather than
+        # real grids; training on them teaches the corner head nonsense.
+        area = abs(
+            0.5 * sum(quad[i, 0] * quad[(i + 1) % 4, 1]
+                      - quad[(i + 1) % 4, 0] * quad[i, 1] for i in range(4))
+        )
+        if area < MIN_AREA:
+            continue
+
+        x0, y0 = quad.min(axis=0)
+        x1, y1 = quad.max(axis=0)
+        cx, cy, w, h = (x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0
+        if w <= 0 or h <= 0:
+            continue
+
+        kpts = " ".join(f"{x:.6f} {y:.6f} 2" for x, y in quad)
+        out.append(f"{parts[0]} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f} {kpts}")
+
+    return "\n".join(out) + "\n" if out else None
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--src", type=Path, default=SRC)
+    ap.add_argument("--dst", type=Path, default=DST)
+    args = ap.parse_args()
+
+    if not args.src.exists():
+        raise SystemExit(f"Source dataset not found: {args.src}")
+
+    stats = {}
+    for split in SPLITS:
+        src_img, src_lbl = args.src / split / "images", args.src / split / "labels"
+        if not src_img.exists():
+            continue
+        dst_img, dst_lbl = args.dst / split / "images", args.dst / split / "labels"
+        dst_img.mkdir(parents=True, exist_ok=True)
+        dst_lbl.mkdir(parents=True, exist_ok=True)
+
+        kept = skipped = 0
+        for lbl in sorted(src_lbl.glob("*.txt")):
+            converted = convert_label(lbl.read_text())
+            if converted is None:
+                # Empty label = no annotated grid; carrying it over would train
+                # the model to predict nothing on a perfectly good photo.
+                skipped += 1
+                continue
+            img = next((p for p in src_img.glob(lbl.stem + ".*")), None)
+            if img is None:
+                skipped += 1
+                continue
+            (dst_lbl / lbl.name).write_text(converted)
+            shutil.copy2(img, dst_img / img.name)
+            kept += 1
+        stats[split] = (kept, skipped)
+
+    yaml = args.dst / "data.yaml"
+    yaml.write_text(
+        "# YOLOv8-pose: sudoku grid corners (TL, TR, BR, BL)\n"
+        "# Generated by training/grid_pose/prepare_dataset.py\n"
+        "# Source: Roboflow sudoku-lq9gj v1 (CC BY 4.0)\n"
+        f"path: {args.dst}\n"
+        "train: train/images\n"
+        "val: valid/images\n"
+        "test: test/images\n\n"
+        "nc: 1\n"
+        "names: ['Sudoku']\n\n"
+        "kpt_shape: [4, 3]\n"
+        # Horizontal flip maps TL<->TR and BL<->BR, so the corner indices must
+        # swap with it or flipped samples would train contradictory targets.
+        "flip_idx: [1, 0, 3, 2]\n"
+    )
+
+    for split, (kept, skipped) in stats.items():
+        print(f"{split:6s} {kept:4d} converted   {skipped:3d} skipped")
+    print(f"\nWrote {yaml}")
+
+
+if __name__ == "__main__":
+    main()

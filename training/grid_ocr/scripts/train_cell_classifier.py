@@ -155,6 +155,15 @@ def _render_digit(digit: int, size: int) -> np.ndarray:
             y = random.randint(0, canvas.shape[0])
             cv2.line(canvas, (0, y), (canvas.shape[1], y), lc, 1)
 
+    return _finish_cell(canvas, size, bg_val)
+
+
+def _finish_cell(canvas: np.ndarray, size: int, bg_val: int) -> np.ndarray:
+    """Rotate, crop, and apply the cell-domain artifacts (borders, noise, blur).
+
+    Shared by the font-rendered and handwritten sources so both land in the
+    same distribution as real extracted cells.
+    """
     # Random rotation
     angle = random.uniform(-8, 8)
     M = cv2.getRotationMatrix2D(
@@ -209,6 +218,106 @@ def _render_digit(digit: int, size: int) -> np.ndarray:
     return canvas
 
 
+MNIST_RAW = PROJECT / "training" / "sudoku_digit_classification" / "mnist_data" / "MNIST" / "raw"
+
+
+def _load_mnist(split: str = "train") -> tuple[np.ndarray, np.ndarray]:
+    """Load MNIST from the local idx files. Returns (images uint8 N×28×28, labels).
+
+    `split` is "train", "test" or "all".  Training uses "train" only so the
+    10k test split stays clean for evaluation — an earlier version trained on
+    both and then "measured" 100 % on data it had already seen.
+
+    Zeros are dropped: in this task class 0 means *empty cell*, not the digit
+    zero, and a sudoku never contains a 0 glyph.
+    """
+    def _read(path: Path, kind: str) -> np.ndarray:
+        raw = np.frombuffer(path.read_bytes(), dtype=np.uint8)
+        if kind == "images":
+            n, rows, cols = (int.from_bytes(raw[i:i + 4], "big") for i in (4, 8, 12))
+            return raw[16:].reshape(n, rows, cols)
+        n = int.from_bytes(raw[4:8], "big")
+        return raw[8:8 + n]
+
+    stems = {"train": ["train"], "test": ["t10k"], "all": ["train", "t10k"]}[split]
+    imgs = np.concatenate([
+        _read(MNIST_RAW / f"{st}-images-idx3-ubyte", "images") for st in stems
+    ])
+    labels = np.concatenate([
+        _read(MNIST_RAW / f"{st}-labels-idx1-ubyte", "labels") for st in stems
+    ])
+    keep = labels > 0
+    return imgs[keep], labels[keep]
+
+
+def _render_handwritten(glyph: np.ndarray, size: int) -> np.ndarray:
+    """Render one MNIST glyph as a sudoku cell: dark ink on light paper.
+
+    MNIST is white-on-black and tightly cropped; real cells are dark ink on
+    paper with the digit occupying roughly 55-80 % of the cell height.  Ballpoint
+    strokes are also lighter and thinner than print, so the ink tone is drawn
+    from a wider, lighter range than the font renderer uses.
+    """
+    bg_val = random.randint(215, 255)
+    canvas = np.ones((size * 3, size * 3), dtype=np.uint8) * bg_val
+
+    ink = 255 - glyph                       # -> dark digit on white
+    ys, xs = np.where(ink < 200)
+    if len(ys) == 0:
+        return _finish_cell(canvas, size, bg_val)
+    ink = ink[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+
+    target_h = int(size * random.uniform(0.55, 0.82))
+    scale = target_h / ink.shape[0]
+    target_w = max(1, int(ink.shape[1] * scale * random.uniform(0.9, 1.1)))
+    ink = cv2.resize(ink, (target_w, target_h), interpolation=cv2.INTER_AREA)
+
+    # Biro is lighter than print: lift the darkest stroke value.
+    ink_floor = random.randint(20, 90)
+    ink = np.clip(ink.astype(np.float32), ink_floor, 255).astype(np.uint8)
+
+    # Vary stroke weight, biased towards thinning.  MNIST is written with a
+    # thick marker; ballpoint on paper is much finer.  That matters for closed
+    # glyphs above all: a thick looped "2" fills its loop in and reads as a "9"
+    # (observed on a real photo, where every looped 2 was misread).  Dilating
+    # the light background thins the dark stroke; eroding thickens it.
+    k = random.choice([0, 0, 1, 1, 1, 2])
+    if k:
+        kernel = np.ones((2 * k + 1, 2 * k + 1), np.uint8)
+        if random.random() < 0.75:
+            ink = cv2.dilate(ink, kernel)     # thinner stroke (biro)
+        else:
+            ink = cv2.erode(ink, kernel)      # bolder stroke
+
+    # Paste into the centre third (that is the region _finish_cell keeps).
+    cy = canvas.shape[0] // 2 + random.randint(-4, 4)
+    cx = canvas.shape[1] // 2 + random.randint(-4, 4)
+    y0 = cy - target_h // 2
+    x0 = cx - target_w // 2
+    region = canvas[y0:y0 + target_h, x0:x0 + target_w]
+    canvas[y0:y0 + target_h, x0:x0 + target_w] = np.minimum(region, ink)
+
+    return _finish_cell(canvas, size, bg_val)
+
+
+class HandwrittenCellDataset(Dataset):
+    """MNIST digits 1-9 rendered into the sudoku-cell domain."""
+
+    def __init__(self, size: int = 40_000, cell_size: int = CELL_SIZE):
+        self.size = size
+        self.cell_size = cell_size
+        self.images, self.labels_src = _load_mnist("train")
+
+    def __len__(self) -> int:
+        return self.size
+
+    def __getitem__(self, idx: int):
+        j = random.randrange(len(self.images))
+        img = _render_handwritten(self.images[j], self.cell_size)
+        t = torch.from_numpy(img).float().unsqueeze(0) / 255.0
+        return t, int(self.labels_src[j])
+
+
 class SyntheticCellDataset(Dataset):
     def __init__(self, size: int = 60_000, cell_size: int = CELL_SIZE):
         self.size = size
@@ -236,7 +345,9 @@ def train(
     batch_size: int = 128,
     lr: float = 1e-3,
     synthetic_size: int = 60_000,
+    handwritten_size: int = 40_000,
     num_workers: int = 4,
+    out_model: Path = OUT_MODEL,
 ) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
@@ -248,14 +359,19 @@ def train(
 
     real_ds = RealCellDataset(REAL_CELLS_DIR, transform=real_aug)
     synth_ds = SyntheticCellDataset(size=synthetic_size)
+    hand_ds = HandwrittenCellDataset(size=handwritten_size) if handwritten_size else None
 
     if len(real_ds) == 0:
         print("WARNING: No real cell data found. Run extract_and_label_cells.py first.")
         print("Training on synthetic data only.")
         train_ds = synth_ds
     else:
-        print(f"Real cells: {len(real_ds):,}   Synthetic: {len(synth_ds):,}")
-        train_ds = ConcatDataset([real_ds, synth_ds])
+        parts = [real_ds, synth_ds]
+        if hand_ds is not None:
+            parts.append(hand_ds)
+        print(f"Real cells: {len(real_ds):,}   Synthetic: {len(synth_ds):,}   "
+              f"Handwritten: {len(hand_ds) if hand_ds else 0:,}")
+        train_ds = ConcatDataset(parts)
 
     loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=True,
@@ -320,11 +436,11 @@ def train(
     best_ckpt = CKPT_DIR / "best.pth"
     if best_ckpt.exists():
         import shutil
-        shutil.copy(best_ckpt, OUT_MODEL)
-        print(f"\nBest model saved to {OUT_MODEL}")
+        shutil.copy(best_ckpt, out_model)
+        print(f"\nBest model saved to {out_model}")
     else:
-        torch.save(model.state_dict(), OUT_MODEL)
-        print(f"\nFinal model saved to {OUT_MODEL}")
+        torch.save(model.state_dict(), out_model)
+        print(f"\nFinal model saved to {out_model}")
 
 
 if __name__ == "__main__":
@@ -333,6 +449,9 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--synthetic_size", type=int, default=60_000)
+    parser.add_argument("--handwritten_size", type=int, default=40_000,
+                        help="MNIST-derived handwritten cells per epoch (0 disables)")
     parser.add_argument("--num_workers", type=int, default=4)
+    parser.add_argument("--out_model", type=Path, default=OUT_MODEL)
     args = parser.parse_args()
     train(**vars(args))

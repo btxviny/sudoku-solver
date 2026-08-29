@@ -1,26 +1,23 @@
 #!/usr/bin/env python3
-"""
-Mask R-CNN Training Script for Sudoku Grid Segmentation
+"""Train Mask R-CNN for sudoku grid segmentation (YOLOv8 polygon labels)."""
 
-This script trains a Mask R-CNN model for segmenting Sudoku grids in images.
-It uses YOLOv8 segmentation format for the dataset.
-"""
-
-import os
 import argparse
-import torch
-import torch.utils.data
-from torch.utils.data import DataLoader
-import torchvision
-from torchvision.models.detection import maskrcnn_resnet50_fpn
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-from PIL import Image
-import numpy as np
-from pathlib import Path
-import cv2
 import json
+import sys
 from datetime import datetime
+from pathlib import Path
+
+import cv2
+import numpy as np
+import torch
+from PIL import Image
+from torch.utils.data import DataLoader
+from torchvision.transforms.functional import to_tensor
+
+PROJECT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PROJECT / "src"))
+
+from sudoku_solver.grid_detector import build_maskrcnn
 
 
 def load_yolov8_segmentation(label_path, img_size):
@@ -37,7 +34,7 @@ def load_yolov8_segmentation(label_path, img_size):
     H, W = img_size
     boxes, labels, masks = [], [], []
 
-    if not os.path.exists(label_path):
+    if not Path(label_path).exists():
         return torch.zeros((0, 4), dtype=torch.float32), \
                torch.zeros((0,), dtype=torch.int64), \
                torch.zeros((0, H, W), dtype=torch.uint8)
@@ -108,26 +105,11 @@ class YOLOv8SegmentationDataset(torch.utils.data.Dataset):
             target = {"boxes": boxes, "labels": labels, "masks": masks}
             if self.transforms:
                 img, target = self.transforms(img, target)
-            return torchvision.transforms.ToTensor()(img), target
+            return to_tensor(img), target
 
 
 def get_instance_segmentation_model(num_classes):
-    """
-    Create a Mask R-CNN model for instance segmentation.
-    
-    Args:
-        num_classes (int): Number of classes (including background)
-    
-    Returns:
-        torch.nn.Module: Mask R-CNN model
-    """
-    model = maskrcnn_resnet50_fpn(weights="DEFAULT")
-    in_features = model.roi_heads.box_predictor.cls_score.in_features
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-    in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
-    hidden_layer = 256
-    model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask, hidden_layer, num_classes)
-    return model
+    return build_maskrcnn(num_classes=num_classes)
 
 
 def train_model(model, train_loader, val_loader, optimizer, device, 
@@ -244,25 +226,28 @@ def main():
     parser.add_argument('--momentum', type=float, default=0.9, help='SGD momentum')
     parser.add_argument('--weight_decay', type=float, default=0.0005, help='Weight decay')
     parser.add_argument('--patience', type=int, default=3, help='Early stopping patience')
-    parser.add_argument('--output_dir', type=str, default='/home/viny/CV-sudoku-solver/models/weights', 
-                       help='Directory to save trained models')
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=str(PROJECT / "models" / "weights"),
+        help="Directory to save trained models",
+    )
     parser.add_argument('--model_name', type=str, default='maskrcnn_sudoku', 
                        help='Name for the saved model')
     
     args = parser.parse_args()
     
     # Create output directory
-    os.makedirs(args.output_dir, exist_ok=True)
-    
-    # Set device
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    
-    # Dataset paths
-    train_image_dir = os.path.join(args.data_root, 'train', 'images')
-    train_label_dir = os.path.join(args.data_root, 'train', 'labels')
-    val_image_dir = os.path.join(args.data_root, 'valid', 'images')
-    val_label_dir = os.path.join(args.data_root, 'valid', 'labels')
+
+    data_root = Path(args.data_root)
+    train_image_dir = data_root / "train" / "images"
+    train_label_dir = data_root / "train" / "labels"
+    val_image_dir = data_root / "valid" / "images"
+    val_label_dir = data_root / "valid" / "labels"
     
     print(f"Training images: {train_image_dir}")
     print(f"Training labels: {train_label_dir}")
@@ -304,7 +289,7 @@ def main():
     
     # Save model
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_path = os.path.join(args.output_dir, f"{args.model_name}_{timestamp}.pth")
+    model_path = str(Path(args.output_dir) / f"{args.model_name}_{timestamp}.pth")
     save_model(model, model_path, training_history)
     
     print("Training completed!")

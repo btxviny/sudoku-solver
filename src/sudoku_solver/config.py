@@ -37,51 +37,8 @@ class GridDetectorConfig:
     model_path: Path = field(default_factory=latest_maskrcnn)
     detection_threshold: float = 0.5
     output_size: int = 450
-    resize_to: tuple = (1024, 1024)
+    resize_to: tuple[int, int] = (1024, 1024)
     contour_epsilon: float = 0.02
-
-    def __post_init__(self):
-        self.model_path = resolve(self.model_path)
-
-
-@dataclass
-class CellExtractorConfig:
-    """Configuration for the cell extraction module."""
-    grid_size: int = 9
-    cell_size: tuple = (28, 28)
-    empty_pixel_threshold: float = 200
-    empty_ratio_threshold: float = 0.7
-
-
-@dataclass
-class DigitClassifierConfig:
-    """Configuration for the digit classification module."""
-    model_path: Path = field(
-        default_factory=lambda: WEIGHTS_DIR / "xgboost_digit_classifier.model"
-    )
-    confidence_threshold: float = 0.4
-    feature_dim: int = 512
-    num_classes: int = 10
-    image_size: tuple = (28, 28)
-
-    def __post_init__(self):
-        self.model_path = resolve(self.model_path)
-
-
-@dataclass
-class ImageNetConfig:
-    """ImageNet normalization constants."""
-    mean: tuple = (0.485, 0.456, 0.406)
-    std: tuple = (0.229, 0.224, 0.225)
-
-
-@dataclass
-class CellExtractorCNNConfig:
-    """Configuration for the CNN-based cell extractor."""
-    model_path: Path = field(
-        default_factory=lambda: WEIGHTS_DIR / "cell_extractor_cnn.pth"
-    )
-    input_size: int = 320   # resize shorter edge to this before inference
 
     def __post_init__(self):
         self.model_path = resolve(self.model_path)
@@ -112,20 +69,43 @@ class YoloCellExtractorConfig:
 
 
 @dataclass
-class YoloDigitClassifierConfig:
-    """Configuration for the YOLO classification model that reads digit values 0-9.
+class YoloGridDetectorConfig:
+    """Configuration for the YOLO grid detector (Android-friendly Mask R-CNN replacement).
+
+    `mode` selects the backend:
+        "seg"   YOLOv8n-seg predicts a grid mask; corners come from the mask,
+                exactly as the Mask R-CNN path derives them.
+        "pose"  YOLOv8n-pose regresses the four corners directly.  Simpler to
+                port (no mask post-processing at all), slightly less accurate.
+
+    `refine` controls the shared Hough edge-snapping step.  It defaults to
+    **off** here, unlike the Mask R-CNN path which always applies it: that
+    refinement exists to correct Mask R-CNN's habit of under-segmenting the
+    bottom edge, and its search band (BAND_OUT = 0.14) is wide enough to
+    reach a page edge or table rule.  The YOLO detectors do not have that
+    defect, so on their already-accurate quads the wide band is pure risk --
+    measured on the 100 held-out images it pushed mean corner error from
+    5.7 % to 40.9 %, blowing up roughly a third of images completely.
+
+    Leave `model_path` as None to pick the weights matching `mode`.
 
     Train with:
-        yolo classify train data=<digit-dataset> model=yolov8n-cls.pt epochs=50
-    Expected classes: 0=empty, 1-9=digits  (10 classes total).
+        uv run python training/grid_pose/prepare_dataset.py   # seg needs no prep
+        uv run python training/grid_pose/train.py
+        uv run python training/grid_seg/train.py
     """
-    model_path: Path = field(
-        default_factory=lambda: PROJECT_ROOT
-        / "training/digit_classification/runs/digit_cls/weights/best.pt"
-    )
-    imgsz: int = 64
+    mode: str = "seg"
+    model_path: Path | None = None
+    conf: float = 0.25
+    imgsz: int = 640
+    output_size: int = 450
+    resize_to: tuple[int, int] = (1024, 1024)
+    refine: bool = False
 
     def __post_init__(self):
+        if self.model_path is None:
+            run = "grid_seg/runs/grid_seg_v1" if self.mode == "seg" else "grid_pose/runs/grid_pose_v1"
+            self.model_path = PROJECT_ROOT / "training" / run / "weights/best.pt"
         self.model_path = resolve(self.model_path)
 
 
@@ -133,12 +113,9 @@ class YoloDigitClassifierConfig:
 class PipelineConfig:
     """Top-level configuration for the entire pipeline."""
     grid_detector: GridDetectorConfig = field(default_factory=GridDetectorConfig)
-    cell_extractor: CellExtractorConfig = field(default_factory=CellExtractorConfig)
-    cell_extractor_cnn: CellExtractorCNNConfig = field(default_factory=CellExtractorCNNConfig)
-    digit_classifier: DigitClassifierConfig = field(default_factory=DigitClassifierConfig)
     grid_ocr: GridOCRConfig = field(default_factory=GridOCRConfig)
     yolo_cell_extractor: YoloCellExtractorConfig = field(default_factory=YoloCellExtractorConfig)
-    yolo_digit_classifier: YoloDigitClassifierConfig = field(default_factory=YoloDigitClassifierConfig)
+    yolo_grid_detector: YoloGridDetectorConfig = field(default_factory=YoloGridDetectorConfig)
     device: str = "auto"   # "auto" | "cuda" | "cpu"
 
     @property

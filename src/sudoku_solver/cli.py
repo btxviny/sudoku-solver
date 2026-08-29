@@ -1,9 +1,14 @@
+"""Command-line entry point for the sudoku solver."""
+
+from __future__ import annotations
+
 import argparse
+import logging
 import sys
 from pathlib import Path
 
-from .pipeline import SudokuPipeline, PIPELINE_PATHS
-from .config import PipelineConfig, GridDetectorConfig
+from .config import GridDetectorConfig, PipelineConfig
+from .pipeline import PIPELINE_PATHS, SudokuPipeline
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,6 +50,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.image is None and not args.list_paths:
         parser.error("the following arguments are required: image")
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
 
     cfg = PipelineConfig(device=args.device)
     if args.maskrcnn:
