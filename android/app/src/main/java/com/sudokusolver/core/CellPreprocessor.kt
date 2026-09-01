@@ -16,13 +16,13 @@ import kotlin.math.roundToInt
  * This file is the one to port exactly and change reluctantly.  GridOCRNet was
  * trained on cells produced by precisely these steps, so any drift here is
  * indistinguishable to the network from a different problem: in the Python
- * pipeline, letting the cell size vary from the trained 50 px dropped digit
+ * pipeline, letting the cell size vary from the trained 70 px dropped digit
  * accuracy to 20 %.  The constants below are measured, not chosen.
  */
 object CellPreprocessor {
 
     /** Cell edge in pixels. GridOCRNet was trained at this size; do not derive it. */
-    const val PATCH = 50
+    const val PATCH = 70
 
     /** Grid edge implied by [PATCH]. */
     const val GRID = PATCH * 9
@@ -48,7 +48,7 @@ object CellPreprocessor {
      * Every cell is cut from the *whole grid* rescaled so a cell measures
      * [PATCH], rather than resizing each detected box on its own.  That is not
      * a shortcut -- it is the accuracy-relevant choice.  GridOCRNet learned
-     * 50 px cells cut from a 450 px grid, and rescaling tight boxes
+     * 70 px cells cut from a 450 px grid, and rescaling tight boxes
      * individually changes how much of the cell the digit fills.  Measured over
      * 90 held-out photos: per-box rescaling solved 68, canonical sampling 74.
      *
@@ -194,7 +194,7 @@ object CellPreprocessor {
     /**
      * Pack prepared patches into the tensor GridOCR expects.
      *
-     * The exported model takes **(81, 1, 50, 50)** -- a fixed batch of one whole
+     * The exported model takes **(81, 1, 70, 70)** -- a fixed batch of one whole
      * grid, in PyTorch's NCHW order, which the LiteRT converter preserved rather
      * than transposing to NHWC.  Verify against `assets/models.json` after any
      * re-export rather than assuming: layout mistakes do not throw, they just
