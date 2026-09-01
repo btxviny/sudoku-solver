@@ -19,31 +19,6 @@ def resolve(path: Path | str) -> Path:
     return p if p.is_absolute() else PROJECT_ROOT / p
 
 
-def latest_maskrcnn() -> Path:
-    """Newest `maskrcnn_sudoku_*.pth` in the weights dir.
-
-    Weights are timestamped at training time, so pinning one filename in the
-    config goes stale after every retrain.  Falls back to a conventional path
-    (which simply won't exist) so callers can report a missing-weights error
-    instead of crashing on an empty glob.
-    """
-    candidates = sorted(WEIGHTS_DIR.glob("maskrcnn_sudoku_*.pth"))
-    return candidates[-1] if candidates else WEIGHTS_DIR / "maskrcnn_sudoku.pth"
-
-
-@dataclass
-class GridDetectorConfig:
-    """Configuration for the grid detection module."""
-    model_path: Path = field(default_factory=latest_maskrcnn)
-    detection_threshold: float = 0.5
-    output_size: int = 450
-    resize_to: tuple[int, int] = (1024, 1024)
-    contour_epsilon: float = 0.02
-
-    def __post_init__(self):
-        self.model_path = resolve(self.model_path)
-
-
 @dataclass
 class GridOCRConfig:
     """Configuration for the GridOCR CNN digit reader."""
@@ -70,22 +45,21 @@ class YoloCellExtractorConfig:
 
 @dataclass
 class YoloGridDetectorConfig:
-    """Configuration for the YOLO grid detector (Android-friendly Mask R-CNN replacement).
+    """Configuration for the YOLO grid detector (step 1: locate and rectify).
 
     `mode` selects the backend:
         "seg"   YOLOv8n-seg predicts a grid mask; corners come from the mask,
-                exactly as the Mask R-CNN path derives them.
+                fitted to the mask.
         "pose"  YOLOv8n-pose regresses the four corners directly.  Simpler to
                 port (no mask post-processing at all), slightly less accurate.
 
-    `refine` controls the shared Hough edge-snapping step.  It defaults to
-    **off** here, unlike the Mask R-CNN path which always applies it: that
-    refinement exists to correct Mask R-CNN's habit of under-segmenting the
-    bottom edge, and its search band (BAND_OUT = 0.14) is wide enough to
-    reach a page edge or table rule.  The YOLO detectors do not have that
-    defect, so on their already-accurate quads the wide band is pure risk --
-    measured on the 100 held-out images it pushed mean corner error from
-    5.7 % to 40.9 %, blowing up roughly a third of images completely.
+    `refine` controls the Hough edge-snapping step in `grid_geometry`, and
+    defaults to **off**.  That refinement was written for a detector that
+    under-segmented the bottom edge, and its search band (BAND_OUT = 0.14) is
+    wide enough to reach a page edge or table rule.  These detectors do not have
+    that defect, so on their already-accurate quads the wide band is pure risk --
+    measured on 100 held-out images it pushed mean corner error from 5.7 % to
+    40.9 %, blowing up roughly a third of images completely.
 
     Leave `model_path` as None to pick the weights matching `mode`.
 
@@ -112,7 +86,6 @@ class YoloGridDetectorConfig:
 @dataclass
 class PipelineConfig:
     """Top-level configuration for the entire pipeline."""
-    grid_detector: GridDetectorConfig = field(default_factory=GridDetectorConfig)
     grid_ocr: GridOCRConfig = field(default_factory=GridOCRConfig)
     yolo_cell_extractor: YoloCellExtractorConfig = field(default_factory=YoloCellExtractorConfig)
     yolo_grid_detector: YoloGridDetectorConfig = field(default_factory=YoloGridDetectorConfig)

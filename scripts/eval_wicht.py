@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from sudoku_solver.config import PipelineConfig
-from sudoku_solver.grid_detector import GridDetector
+from sudoku_solver.yolo_grid_detector import YoloGridDetector
 from sudoku_solver.grid_ocr import GridOCR
 
 
@@ -40,7 +40,7 @@ def run(data_dir: Path, limit: int | None) -> None:
         raise SystemExit(f"No labelled images (imageX.jpg + imageX.dat) in {data_dir}")
 
     cfg = PipelineConfig()
-    detector = GridDetector(cfg.grid_detector)
+    detector = YoloGridDetector(cfg.yolo_grid_detector)
     ocr = GridOCR(cfg.grid_ocr)
 
     n_detect_fail = 0

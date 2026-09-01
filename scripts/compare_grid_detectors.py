@@ -1,4 +1,4 @@
-"""Compare grid detectors against the Mask R-CNN baseline.
+"""Compare the YOLO grid detectors (seg vs pose, with and without refinement).
 
 Two evaluations, because they answer different questions:
 
@@ -34,12 +34,7 @@ from tqdm import tqdm
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from sudoku_solver.config import (
-    GridDetectorConfig,
-    GridOCRConfig,
-    YoloGridDetectorConfig,
-)
-from sudoku_solver.grid_detector import GridDetector
+from sudoku_solver.config import GridOCRConfig, YoloGridDetectorConfig
 from sudoku_solver.grid_ocr import GridOCR
 from sudoku_solver.yolo_grid_detector import YoloGridDetector, order_corners
 
@@ -59,10 +54,6 @@ HIT_TOL = 0.02
 def build_detector(name: str, refine: bool = True):
     """Build one of the named detectors, or None if its weights are missing."""
     try:
-        if name == "maskrcnn":
-            cfg = GridDetectorConfig()
-            cfg.resize_to = RESIZE_TO
-            return GridDetector(cfg)
         if name in ("pose", "seg"):
             cfg = YoloGridDetectorConfig(mode=name, refine=refine)
             if name == "seg":
@@ -231,7 +222,7 @@ def report(title: str, results: dict, keys: list[tuple[str, str]]) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("eval", choices=["corners", "wicht", "both"])
-    ap.add_argument("--detectors", default="maskrcnn,pose,seg")
+    ap.add_argument("--detectors", default="seg,pose")
     ap.add_argument("--data-dir", type=Path, action="append", default=None,
                     help="Wicht dirs (repeatable); defaults to v2_test + half_mixed_test")
     ap.add_argument("--no-refine", action="store_true",

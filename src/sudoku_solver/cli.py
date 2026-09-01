@@ -7,7 +7,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .config import GridDetectorConfig, PipelineConfig
+from .config import PipelineConfig
 from .pipeline import PIPELINE_PATHS, SudokuPipeline
 
 
@@ -18,17 +18,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "image", nargs="?", help="Path to sudoku image (omit with --list-paths)"
-    )
-    parser.add_argument(
-        "--maskrcnn",
-        default=None,
-        help="Path to Mask R-CNN weights (overrides config default)",
-    )
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.5,
-        help="Grid detection confidence threshold",
     )
     parser.add_argument(
         "--path",
@@ -57,11 +46,6 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     cfg = PipelineConfig(device=args.device)
-    if args.maskrcnn:
-        cfg.grid_detector = GridDetectorConfig(
-            model_path=Path(args.maskrcnn),
-            detection_threshold=args.threshold,
-        )
 
     try:
         pipe = SudokuPipeline(cfg)

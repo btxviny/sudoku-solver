@@ -19,33 +19,59 @@ import torch.nn.functional as F
 from .config import GridOCRConfig
 
 
+class _ResBlock(nn.Module):
+    def __init__(self, in_ch: int, out_ch: int, stride: int = 1):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_ch)
+        self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_ch)
+        self.act = nn.GELU()
+        self.skip: nn.Module = (
+            nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_ch),
+            )
+            if (in_ch != out_ch or stride != 1)
+            else nn.Identity()
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.act(self.bn2(self.conv2(self.act(self.bn1(self.conv1(x))))) + self.skip(x))
+
+
 class GridOCRNet(nn.Module):
-    """Lightweight CNN: CELL_SIZE × CELL_SIZE grayscale → 10 logits.
+    """Residual CNN: CELL_SIZE × CELL_SIZE grayscale → 10 logits.
 
     Class 0 = empty cell; classes 1–9 = digit.
+    4 residual blocks (32→64→128→256) with stride-2 downsampling + GlobalAvgPool.
     """
 
     def __init__(self, cell_size: int = 50):
         super().__init__()
         self.cell_size = cell_size
-        self.features = nn.Sequential(
-            nn.Conv2d(1, 32, 3, padding=1), nn.BatchNorm2d(32), nn.GELU(),
-            nn.Conv2d(32, 32, 3, padding=1), nn.BatchNorm2d(32), nn.GELU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, 3, padding=1), nn.BatchNorm2d(64), nn.GELU(),
-            nn.Conv2d(64, 64, 3, padding=1), nn.BatchNorm2d(64), nn.GELU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(64, 128, 3, padding=1), nn.BatchNorm2d(128), nn.GELU(),
-            nn.AdaptiveAvgPool2d(4),
-            nn.Flatten(),
+        self.stem = nn.Sequential(
+            nn.Conv2d(1, 32, 3, padding=1, bias=False),
+            nn.BatchNorm2d(32), nn.GELU(),
         )
+        self.layer1 = _ResBlock(32, 64, stride=2)    # 25×25
+        self.layer2 = _ResBlock(64, 128, stride=2)   # 12×12
+        self.layer3 = _ResBlock(128, 256, stride=2)  # 6×6
+        self.layer4 = _ResBlock(256, 256, stride=1)  # 6×6
+        self.pool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
-            nn.Linear(2048, 256), nn.GELU(), nn.Dropout(0.35),
-            nn.Linear(256, 10),
+            nn.Flatten(),
+            nn.Linear(256, 128), nn.GELU(), nn.Dropout(0.4),
+            nn.Linear(128, 10),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.classifier(self.features(x))
+        x = self.stem(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        return self.classifier(self.pool(x))
 
 
 class GridOCR:

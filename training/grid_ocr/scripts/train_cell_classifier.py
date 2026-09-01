@@ -34,33 +34,58 @@ CKPT_DIR.mkdir(parents=True, exist_ok=True)
 # Model
 # ---------------------------------------------------------------------------
 
+class _ResBlock(nn.Module):
+    def __init__(self, in_ch: int, out_ch: int, stride: int = 1):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_ch)
+        self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_ch)
+        self.act = nn.GELU()
+        self.skip: nn.Module = (
+            nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_ch),
+            )
+            if (in_ch != out_ch or stride != 1)
+            else nn.Identity()
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.act(self.bn2(self.conv2(self.act(self.bn1(self.conv1(x))))) + self.skip(x))
+
+
 class GridOCRNet(nn.Module):
-    """Lightweight CNN: CELL_SIZE × CELL_SIZE grayscale → 10 logits (0=empty, 1-9=digit)."""
+    """Residual CNN: CELL_SIZE × CELL_SIZE grayscale → 10 logits (0=empty, 1-9=digit).
+
+    4 residual blocks (32→64→128→256) with stride-2 downsampling + GlobalAvgPool.
+    """
 
     def __init__(self, cell_size: int = CELL_SIZE):
         super().__init__()
         self.cell_size = cell_size
-        self.features = nn.Sequential(
-            # Block 1  cell_size → cell_size/2
-            nn.Conv2d(1, 32, 3, padding=1), nn.BatchNorm2d(32), nn.GELU(),
-            nn.Conv2d(32, 32, 3, padding=1), nn.BatchNorm2d(32), nn.GELU(),
-            nn.MaxPool2d(2),
-            # Block 2  /2 → /4
-            nn.Conv2d(32, 64, 3, padding=1), nn.BatchNorm2d(64), nn.GELU(),
-            nn.Conv2d(64, 64, 3, padding=1), nn.BatchNorm2d(64), nn.GELU(),
-            nn.MaxPool2d(2),
-            # Block 3  /4 → /8
-            nn.Conv2d(64, 128, 3, padding=1), nn.BatchNorm2d(128), nn.GELU(),
-            nn.AdaptiveAvgPool2d(4),   # fixed 4×4 regardless of cell_size
-            nn.Flatten(),              # 128 × 16 = 2048
+        self.stem = nn.Sequential(
+            nn.Conv2d(1, 32, 3, padding=1, bias=False),
+            nn.BatchNorm2d(32), nn.GELU(),
         )
+        self.layer1 = _ResBlock(32, 64, stride=2)    # 25×25
+        self.layer2 = _ResBlock(64, 128, stride=2)   # 12×12
+        self.layer3 = _ResBlock(128, 256, stride=2)  # 6×6
+        self.layer4 = _ResBlock(256, 256, stride=1)  # 6×6
+        self.pool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
-            nn.Linear(2048, 256), nn.GELU(), nn.Dropout(0.35),
-            nn.Linear(256, 10),
+            nn.Flatten(),
+            nn.Linear(256, 128), nn.GELU(), nn.Dropout(0.4),
+            nn.Linear(128, 10),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.classifier(self.features(x))
+        x = self.stem(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        return self.classifier(self.pool(x))
 
     def read_grid(self, grid_img: np.ndarray, device: torch.device) -> np.ndarray:
         """Read a single rectified grid image → 9×9 uint8 array.
@@ -90,16 +115,32 @@ class GridOCRNet(nn.Module):
 # ---------------------------------------------------------------------------
 
 class RealCellDataset(Dataset):
-    def __init__(self, root: Path, transform=None):
+    def __init__(self, root: Path, transform=None, split: str = "all", val_frac: float = 0.2, seed: int = 42):
+        """Load real cell crops.
+
+        split='all'   → all images (legacy behaviour)
+        split='train' → 80 % per class, stratified
+        split='val'   → 20 % per class, stratified
+        """
         self.samples: list[tuple[Path, int]] = []
         self.transform = transform
+        rng = random.Random(seed)
         for label in range(10):
             label_dir = root / str(label)
             if not label_dir.exists():
                 continue
-            for p in label_dir.glob("*.jpg"):
+            paths = sorted(label_dir.glob("*.jpg"))
+            if split == "all":
+                chosen = paths
+            else:
+                rng2 = random.Random(seed + label)
+                shuffled = list(paths)
+                rng2.shuffle(shuffled)
+                n_val = max(1, int(len(shuffled) * val_frac))
+                chosen = shuffled[n_val:] if split == "train" else shuffled[:n_val]
+            for p in chosen:
                 self.samples.append((p, label))
-        random.shuffle(self.samples)
+        rng.shuffle(self.samples)
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -120,30 +161,69 @@ class RealCellDataset(Dataset):
 # Synthetic dataset  (generated online — unlimited variety)
 # ---------------------------------------------------------------------------
 
-_CV_FONTS = [
-    cv2.FONT_HERSHEY_SIMPLEX,
-    cv2.FONT_HERSHEY_COMPLEX,
-    cv2.FONT_HERSHEY_DUPLEX,
-    cv2.FONT_HERSHEY_PLAIN,
-    cv2.FONT_HERSHEY_COMPLEX_SMALL,
-]
+def _collect_system_fonts() -> list[str]:
+    """Return unique OTF/TTF paths that PIL can load successfully."""
+    import subprocess
+    try:
+        raw = subprocess.check_output(["fc-list"], text=True)
+    except Exception:
+        return []
+    seen: set[str] = set()
+    paths: list[str] = []
+    for line in raw.splitlines():
+        p = line.split(":")[0].strip()
+        if p.endswith((".otf", ".ttf")) and p not in seen:
+            seen.add(p)
+            paths.append(p)
+    return paths
+
+
+_SYSTEM_FONTS: list[str] = _collect_system_fonts()
 
 
 def _render_digit(digit: int, size: int) -> np.ndarray:
-    """Render a single digit (0=empty white square) on a white background."""
+    """Render a single digit (0=empty white square) on a white background.
+
+    Uses PIL with a random system font so the model sees dozens of typefaces
+    (serif, sans-serif, mono, narrow) rather than just 5 OpenCV faces.
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
     bg_val = random.randint(220, 255)
     canvas = np.ones((size * 3, size * 3), dtype=np.uint8) * bg_val
 
     if digit > 0:
-        font = random.choice(_CV_FONTS)
-        scale = random.uniform(2.0, 3.5) * (size / 50)
-        thick = random.randint(1, 3)
         color = random.randint(0, 40)
+        target_h = int(size * random.uniform(0.55, 0.80))
+        font_size = max(8, int(target_h * 1.3))  # PIL font size > glyph height
+
+        font: ImageFont.ImageFont | ImageFont.FreeTypeFont
+        if _SYSTEM_FONTS and random.random() < 0.92:
+            font_path = random.choice(_SYSTEM_FONTS)
+            try:
+                font = ImageFont.truetype(font_path, font_size)
+            except Exception:
+                font = ImageFont.load_default()
+        else:
+            font = ImageFont.load_default()
+
         txt = str(digit)
-        (tw, th), _ = cv2.getTextSize(txt, font, scale, thick)
-        tx = (canvas.shape[1] - tw) // 2 + random.randint(-3, 3)
-        ty = (canvas.shape[0] + th) // 2 + random.randint(-3, 3)
-        cv2.putText(canvas, txt, (tx, ty), font, scale, color, thick, cv2.LINE_AA)
+        pil_img = Image.fromarray(canvas)
+        draw = ImageDraw.Draw(pil_img)
+
+        # Measure actual bounding box so we can centre precisely.
+        try:
+            bbox = draw.textbbox((0, 0), txt, font=font)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        except Exception:
+            tw, th = font_size, font_size
+
+        cx = canvas.shape[1] // 2
+        cy = canvas.shape[0] // 2
+        tx = cx - tw // 2 + random.randint(-3, 3)
+        ty = cy - th // 2 + random.randint(-3, 3)
+        draw.text((tx, ty), txt, fill=int(color), font=font)
+        canvas = np.array(pil_img)
 
     # Random light grid lines on empty cells sometimes
     if digit == 0 and random.random() < 0.2:
@@ -341,11 +421,11 @@ class SyntheticCellDataset(Dataset):
 # ---------------------------------------------------------------------------
 
 def train(
-    epochs: int = 40,
+    epochs: int = 50,
     batch_size: int = 128,
     lr: float = 1e-3,
-    synthetic_size: int = 60_000,
-    handwritten_size: int = 40_000,
+    synthetic_size: int = 80_000,
+    handwritten_size: int = 60_000,
     num_workers: int = 4,
     out_model: Path = OUT_MODEL,
 ) -> None:
@@ -357,20 +437,21 @@ def train(
         transforms.RandomErasing(p=0.15, scale=(0.02, 0.08)),
     ])
 
-    real_ds = RealCellDataset(REAL_CELLS_DIR, transform=real_aug)
+    real_train_ds = RealCellDataset(REAL_CELLS_DIR, transform=real_aug, split="train")
+    real_val_ds = RealCellDataset(REAL_CELLS_DIR, split="val")
     synth_ds = SyntheticCellDataset(size=synthetic_size)
     hand_ds = HandwrittenCellDataset(size=handwritten_size) if handwritten_size else None
 
-    if len(real_ds) == 0:
+    if len(real_train_ds) == 0:
         print("WARNING: No real cell data found. Run extract_and_label_cells.py first.")
         print("Training on synthetic data only.")
         train_ds = synth_ds
     else:
-        parts = [real_ds, synth_ds]
+        parts = [real_train_ds, synth_ds]
         if hand_ds is not None:
             parts.append(hand_ds)
-        print(f"Real cells: {len(real_ds):,}   Synthetic: {len(synth_ds):,}   "
-              f"Handwritten: {len(hand_ds) if hand_ds else 0:,}")
+        print(f"Real train: {len(real_train_ds):,}   Real val: {len(real_val_ds):,}   "
+              f"Synthetic: {len(synth_ds):,}   Handwritten: {len(hand_ds) if hand_ds else 0:,}")
         train_ds = ConcatDataset(parts)
 
     loader = DataLoader(
@@ -378,9 +459,8 @@ def train(
         num_workers=num_workers, pin_memory=device.type == "cuda",
     )
 
-    val_ds = RealCellDataset(REAL_CELLS_DIR)  # re-use real data as quick sanity val
-    val_loader = DataLoader(val_ds, batch_size=256, shuffle=False, num_workers=2) \
-        if len(val_ds) > 0 else None
+    val_loader = DataLoader(real_val_ds, batch_size=256, shuffle=False, num_workers=2) \
+        if len(real_val_ds) > 0 else None
 
     model = GridOCRNet(cell_size=CELL_SIZE).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)

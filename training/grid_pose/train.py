@@ -1,6 +1,6 @@
 """Train YOLOv8n-pose to predict the 4 sudoku grid corners (TL, TR, BR, BL).
 
-Replaces the 169 MB Mask R-CNN grid detector with a ~6 MB model that exports
+A ~6 MB grid detector that exports
 cleanly to TFLite/LiteRT for the Android port.  Run prepare_dataset.py first.
 """
 

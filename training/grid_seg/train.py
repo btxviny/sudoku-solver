@@ -4,7 +4,7 @@ The segmentation counterpart to grid_pose: it predicts a grid mask rather than
 four corners, so the existing `_corners_from_mask` + `_refine_on_grid_lines`
 Hough snapping in GridDetector still applies.  Slower and more code to port
 than the pose model, but it keeps the mask-then-snap behaviour that the current
-Mask R-CNN pipeline depends on.
+pipeline depends on.
 
 Trains directly on data/segmentation/segmentation_dataset -- already YOLOv8
 polygon format, no conversion needed.

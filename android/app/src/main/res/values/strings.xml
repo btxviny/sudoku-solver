@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Sudoku Solver</string>
+    <string name="take_photo">Take photo</string>
+    <string name="pick_image">Choose image</string>
+    <string name="solving">Solving…</string>
+    <string name="grid_preview">Rectified sudoku grid</string>
+</resources>

@@ -29,7 +29,6 @@ class PipelinePath:
     ocr: str
     description: str
     requires: tuple[str, ...]    # SudokuPipeline attributes that must be loaded
-    warp: str = "maskrcnn"       # "maskrcnn" | "yolo" — which detector rectifies
     hint: str = ""               # shown when the path is unavailable
     recommended: bool = False
 
@@ -38,32 +37,18 @@ class PipelinePath:
 PIPELINE_PATHS: tuple[PipelinePath, ...] = (
     PipelinePath(
         key="yolo_gridocr",
-        label="Mask R-CNN warp · YOLO cells · GridOCR CNN",
-        ocr="grid_ocr",
-        description=(
-            "Mask R-CNN locates the grid and corrects perspective; YOLOv8n locates "
-            "the 81 cells on the rectified grid. Each cell is then read by the GridOCR "
-            "CNN, and its per-cell probabilities drive constraint recovery when the "
-            "first solve attempt fails."
-        ),
-        requires=("detector", "yolo_extractor", "grid_ocr"),
-        hint="Needs Mask R-CNN weights + YOLO cell weights + grid_ocr_cnn.pth",
-        recommended=True,
-    ),
-    PipelinePath(
-        key="yolowarp_gridocr",
         label="YOLO grid warp · YOLO cells · GridOCR CNN",
         ocr="grid_ocr",
         description=(
-            "Same as the recommended path, but the grid is located by a ~6 MB "
-            "YOLOv8n model instead of the 169 MB Mask R-CNN — seg or pose, "
-            "selectable in the sidebar — and exports to TFLite for the Android "
-            "port. The perspective warp is shared with the Mask R-CNN path, so "
-            "only the detector differs."
+            "A ~6 MB YOLOv8n model locates the grid and corrects perspective — seg "
+            "or pose, selectable in the sidebar. YOLOv8n then locates the 81 cells "
+            "on the rectified grid, and each cell is read by the GridOCR CNN, whose "
+            "per-cell probabilities drive constraint recovery when the first solve "
+            "attempt fails."
         ),
         requires=("yolo_grid_detector", "yolo_extractor", "grid_ocr"),
-        warp="yolo",
         hint="Needs YOLO grid weights (training/grid_seg or grid_pose) + YOLO cell weights + grid_ocr_cnn.pth",
+        recommended=True,
     ),
 )
 
@@ -93,7 +78,7 @@ class PipelineResult:
     original_grid: np.ndarray | None      # detected puzzle (clues only)
     solved_grid: np.ndarray | None        # complete solution
     timing: dict[str, float] = field(default_factory=dict)
-    grid_image: np.ndarray | None = None  # rectified grid (maskrcnn_yolo) or raw (yolo)
+    grid_image: np.ndarray | None = None  # rectified grid from step 1
     errors: dict[str, str] = field(default_factory=dict)  # step -> error message
     seg_grid_image: np.ndarray | None = None      # segmentation overlay (Step 1)
     seg_cells_image: np.ndarray | None = None     # 9×9 cell mosaic (Step 2)
@@ -103,11 +88,11 @@ class PipelineResult:
 class SudokuPipeline:
     """Orchestrates the full image-to-solution pipeline.
 
-    Segmentation is fixed: Mask R-CNN corrects perspective, then YOLO locates
-    the 81 cells on the rectified grid.  A run selects only the digit reader,
-    and the valid choices are enumerated in `PIPELINE_PATHS`.  Every optional
-    component loads independently, so a pipeline built without, say, the YOLO
-    digit weights still serves every path that does not need them — query
+    Three stages, all YOLO-located: a YOLOv8n grid detector rectifies the
+    photo, YOLOv8n then locates the 81 cells on that rectified grid, and each
+    cell is read individually.  The selectable combinations are enumerated in
+    `PIPELINE_PATHS`.  Every component loads independently, so a pipeline built
+    with weights missing still reports which paths remain — query
     `available_paths()` before calling `run()`.
 
     OCR modes:
@@ -118,14 +103,6 @@ class SudokuPipeline:
         self.cfg = config or PipelineConfig()
         self.solver = SudokuSolver()
         device = self.cfg.effective_device
-
-        def _build_detector():
-            from .grid_detector import GridDetector
-            return GridDetector(self.cfg.grid_detector, device=device)
-
-        self.detector = _try_load(
-            "GridDetector", self.cfg.grid_detector.model_path, _build_detector
-        )
 
         def _build_yolo_grid_detector():
             from .yolo_grid_detector import YoloGridDetector
@@ -287,21 +264,18 @@ class SudokuPipeline:
 
     def run_path(self, image: np.ndarray | str, path: PipelinePath) -> PipelineResult:
         """Run a `PipelinePath` — the mode pair the UI and CLI select from."""
-        return self.run(image, ocr_mode=path.ocr, warp=path.warp)
+        return self.run(image, ocr_mode=path.ocr)
 
     def run(
         self,
         image: np.ndarray | str,
         ocr_mode: str = "grid_ocr",
-        warp: str = "maskrcnn",
     ) -> PipelineResult:
         """Run the full pipeline on an image path or numpy array.
 
         Args:
             image:    File path (str) or RGB numpy array.
             ocr_mode: "grid_ocr"     — GridOCR CNN over the cells YOLO located
-            warp:     "maskrcnn"     — Mask R-CNN locates the grid (default)
-                      "yolo"         — YOLOv8n pose/seg locates the grid
 
         Never raises for a failed step: the failing stage is recorded in
         `PipelineResult.errors` along with whatever earlier stages produced.
@@ -328,26 +302,15 @@ class SudokuPipeline:
 
         # ══ Step 1: Segmentation ══════════════════════════════════════════════
         try:
-            if warp == "yolo":
-                detector = self.yolo_grid_detector
-                if detector is None:
-                    raise RuntimeError(
-                        "YOLO grid detector weights not found. "
-                        "Run training/grid_pose/train.py first."
-                    )
-            elif warp == "maskrcnn":
-                detector = self.detector
-                if detector is None:
-                    raise RuntimeError("Mask R-CNN grid detector weights not found")
-            else:
+            detector = self.yolo_grid_detector
+            if detector is None:
                 raise RuntimeError(
-                    f"Unknown warp mode {warp!r}. Use 'maskrcnn' or 'yolo'."
+                    "YOLO grid detector weights not found. "
+                    "Run training/grid_seg/train.py first."
                 )
             if self.yolo_extractor is None:
                 raise RuntimeError("YOLO cell extractor weights not found")
             t = time.perf_counter()
-            # Both detectors expose the same detect_debug contract, so every
-            # downstream step is identical regardless of which located the grid.
             rectified, seg_grid_image = detector.detect_debug(image)
             timings["grid_detection"] = time.perf_counter() - t
             t = time.perf_counter()

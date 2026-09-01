@@ -1,19 +1,14 @@
-"""YOLO-based grid detector -- the mobile-friendly replacement for Mask R-CNN.
+"""YOLO-based grid detector -- step 1 of the pipeline.
 
-Same interface as `GridDetector` (`detect`, `detect_debug`), so it drops into
-the pipeline in place of the 169 MB Mask R-CNN.  Two backends:
+Locates the sudoku grid in a photo and returns the rectified crop.  Two
+backends:
 
+    "seg"   YOLOv8n-seg predicts a grid mask, and the corners are fitted to it.
     "pose"  YOLOv8n-pose regresses the four grid corners directly.
-    "seg"   YOLOv8n-seg predicts a grid mask, and corners are recovered from it
-            exactly as the Mask R-CNN path does.
 
-Either way the quad is then handed to `GridDetector`'s existing Hough
-refinement and perspective warp, which are pure OpenCV and backend-agnostic --
-so this class changes only *how the grid is located*, never how it is
-rectified.  That keeps the comparison against Mask R-CNN honest: any accuracy
-difference comes from the detector, not from different post-processing.
-
-The Mask R-CNN detector is left untouched and remains the default.
+Either way the quad is handed to `grid_geometry`, whose refinement and
+perspective warp are pure OpenCV and backend-agnostic -- this class decides
+only *how the grid is located*, never how it is rectified.
 """
 
 from __future__ import annotations
@@ -21,8 +16,8 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
+from . import grid_geometry as geom
 from .config import YoloGridDetectorConfig
-from .grid_detector import GridDetector
 
 
 def order_corners(pts: np.ndarray) -> np.ndarray:
@@ -92,7 +87,7 @@ class YoloGridDetector:
         return mask
 
     def _run(self, image: np.ndarray):
-        """Return (rectified, resized, mask, corners) -- mirrors GridDetector._run."""
+        """Return (rectified, resized, mask, corners)."""
         resized = cv2.resize(image, self.cfg.resize_to)
         shape = resized.shape[:2]
         result = self._predict(resized)
@@ -102,12 +97,12 @@ class YoloGridDetector:
             mask = self._mask_from_quad(corners, shape)
         else:
             mask = self._mask_seg(result, shape)
-            corners = GridDetector._corners_from_mask(mask)
+            corners = geom.corners_from_mask(mask)
             if corners is None:
-                contour = GridDetector._mask_contour(mask)
+                contour = geom.mask_contour(mask)
                 if contour is None:
                     raise RuntimeError("No contour found from detection mask.")
-                corners = GridDetector._find_quad(contour)
+                corners = geom.find_quad(contour)
             # Both mask-derived quads come out in whatever rotation the contour
             # tracing happened to start at.  `_perspective_warp` re-sorts
             # internally so rectification never noticed, but `corners()` is a
@@ -115,9 +110,9 @@ class YoloGridDetector:
             corners = order_corners(corners)
 
         if self.cfg.refine:
-            corners = GridDetector._refine_on_grid_lines(resized, mask, corners)
+            corners = geom.refine_on_grid_lines(resized, mask, corners)
 
-        rectified = GridDetector._perspective_warp(
+        rectified = geom.perspective_warp(
             resized, corners, size=self.cfg.output_size
         )
         return rectified, resized, mask, corners
@@ -129,7 +124,7 @@ class YoloGridDetector:
     def detect_debug(self, image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Like `detect`, plus the mask + corner overlay used by the app."""
         rectified, resized, mask, corners = self._run(image)
-        return rectified, GridDetector._seg_overlay(resized, mask, corners)
+        return rectified, geom.seg_overlay(resized, mask, corners)
 
     def corners(self, image: np.ndarray) -> np.ndarray:
         """The four TL/TR/BR/BL corners, in `resize_to` pixel coordinates."""

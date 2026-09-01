@@ -4,7 +4,7 @@ Classes: 0 = empty cell, 1-9 = digit value.
 
 The trained weights land at the path `YoloDigitClassifierConfig` expects:
     training/digit_classification/runs/digit_cls/weights/best.pt
-Once that file exists, the `yolo_yolodigit` and `maskrcnn_yolo_yolodigit`
+Once that file exists, the YOLO-digit
 pipeline paths become available in the CLI and the Streamlit UI.
 
 Usage:

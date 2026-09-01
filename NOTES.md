@@ -1,5 +1,53 @@
 # Sudoku Cell Vision — Training Notes
 
+## Pipeline (current)
+
+Three stages, all YOLO-located, no Mask R-CNN anywhere:
+
+1. **Grid detection + warp** — `YoloGridDetector` (YOLOv8n-seg by default, pose
+   selectable). Corners are fitted to the predicted mask and the crop is
+   rectified by `grid_geometry`.
+2. **Cell segmentation** — `YoloCellExtractor` locates the 81 cells on the
+   rectified grid, with an affine-lattice assignment and in-fill so every slot
+   has a box.
+3. **OCR per cell** — `SudokuPipeline._canonical_cells` cuts one image per cell
+   and `GridOCR.read_cells` classifies each.
+
+### Mask R-CNN removed
+
+The 169 MB `maskrcnn_resnet50_fpn` detector was deleted along with
+`grid_detector.py`, `GridDetectorConfig`, `latest_maskrcnn()`, the `--maskrcnn`
+and `--threshold` CLI flags, the detection-threshold slider, the `warp` selector
+in `PipelinePath`, and `training/segmentation/`.
+
+It was not a trade-off. Measured on the same 90 held-out photos immediately
+before removal:
+
+| detector | cell-extractor | numbers-in-matrix | total | ms |
+|---|---|---|---|---|
+| Mask R-CNN warp | 44/45 | 31/45 | 75/90 | ~125 |
+| **YOLOv8n warp** | **44/45** | **33/45** | **77/90** | **~59** |
+
+The YOLO detector is more accurate *and* 2.4x faster, at 6 MB against 169 MB.
+After removal the benchmark is 44/45 + 33/45 = **77/90**, identical to the YOLO
+path's score before it — nothing else changed.
+
+**`grid_geometry.py`** is new: the corner-fitting, Hough refinement, perspective
+warp and overlay used to live as static methods on `GridDetector`, so the YOLO
+detector had to import the Mask R-CNN class just to reach them. They are pure
+OpenCV and know nothing about what produced the mask, so they now live in their
+own module. The extraction was verified bit-identical against the originals on
+9 images across all six helpers before `grid_detector.py` was deleted.
+
+The Mask R-CNN checkpoint itself is still on disk and untracked by git — it is
+not loaded by anything, and deleting it is a one-liner:
+
+```bash
+rm models/weights/maskrcnn_sudoku_*.pth models/weights/maskrcnn_sudoku_*_history.json
+```
+
+---
+
 ## Dataset
 
 - **Source:** [Roboflow Universe — sudoku-cell-vision v6](https://universe.roboflow.com/pete-mksb1/sudoku-cell-vision/dataset/6)

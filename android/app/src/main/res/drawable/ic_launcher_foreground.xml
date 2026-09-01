@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive-icon foreground: a 3x3 sudoku grid with three cells filled.
+
+  Deliberately 3x3 rather than the real 9x9 - at launcher size a 9x9 grid
+  collapses into grey mush, while 3x3 still reads as "sudoku" at 48dp.
+
+  All content sits between 26 and 82 of the 108 viewport, inside the 72dp safe
+  zone, so nothing is lost when the launcher masks the icon to a circle,
+  squircle or rounded square.
+
+  Kept in step with scripts/make_launcher_icon.py, which renders the same design
+  to the mipmap-* PNG fallbacks.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Filled cells, on the diagonal so the icon stays balanced under any mask.
+         An opaque mid-blue, not translucent white: the grid lines must stay the
+         brightest element or the icon reads inside-out. -->
+    <path
+        android:fillColor="#5685C8"
+        android:pathData="M27.2,27.2 h17.4 v17.4 h-17.4 z
+                          M45.9,45.9 h17.4 v17.4 h-17.4 z
+                          M64.5,64.5 h17.4 v17.4 h-17.4 z" />
+
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:pathData="M26,26 h56 M26,44.7 h56 M26,63.3 h56 M26,82 h56
+                          M26,26 v56 M44.7,26 v56 M63.3,26 v56 M82,26 v56" />
+</vector>

@@ -12,7 +12,6 @@ from PIL import Image
 
 try:
     from sudoku_solver.config import (
-        GridDetectorConfig,
         PipelineConfig,
         YoloCellExtractorConfig,
         YoloGridDetectorConfig,
@@ -21,7 +20,6 @@ try:
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
     from sudoku_solver.config import (
-        GridDetectorConfig,
         PipelineConfig,
         YoloCellExtractorConfig,
         YoloGridDetectorConfig,
@@ -63,7 +61,6 @@ def source_version() -> str:
 @st.cache_resource(show_spinner="Loading models…")
 def load_pipeline(
     device: str,
-    detection_threshold: float,
     output_size: int,
     yolo_conf: float,
     yolo_grid_mode: str,
@@ -76,11 +73,6 @@ def load_pipeline(
     is the source/weights fingerprint, so edits invalidate the cache too.
     """
     cfg = PipelineConfig(device=device)
-    cfg.grid_detector = GridDetectorConfig(
-        model_path=cfg.grid_detector.model_path,
-        detection_threshold=detection_threshold,
-        output_size=output_size,
-    )
     # GridOCR's patch size is NOT derived from the warp size: GridOCRNet was
     # trained on 50 px patches and its grid-line cleanup is tuned for them, so
     # deriving it here silently wrecked the model whenever the slider moved
@@ -91,8 +83,8 @@ def load_pipeline(
         conf=yolo_conf,
     )
     # model_path is left to the config so it tracks `mode`; the Hough refinement
-    # stays off because it is tuned for Mask R-CNN's under-segmented masks and
-    # measurably degrades the YOLO quads (see YoloGridDetectorConfig).
+    # stays off: it was tuned for an under-segmenting detector and measurably
+    # degrades the YOLO quads (see YoloGridDetectorConfig).
     cfg.yolo_grid_detector = YoloGridDetectorConfig(
         mode=yolo_grid_mode,
         output_size=output_size,
@@ -188,11 +180,6 @@ with st.sidebar:
         "Device", ["auto", "cuda", "cpu"], index=0,
         help="`auto` uses the GPU when one is available.",
     )
-    detection_threshold = st.slider(
-        "Grid detection threshold", 0.05, 0.95, 0.50, 0.05,
-        help="Mask R-CNN score a region must beat to count as a grid. "
-             "Lower this if detection fails on a dim or cluttered photo.",
-    )
     output_size = st.select_slider(
         "Rectified grid size (px)", options=[450, 630, 900], value=450,
         help="Size of the perspective-corrected grid. Affects how much detail "
@@ -206,13 +193,13 @@ with st.sidebar:
     )
     yolo_grid_mode = st.radio(
         "YOLO grid backend", ["seg", "pose"], index=0, horizontal=True,
-        help="Which YOLO model locates the grid on the 'YOLO grid warp' paths. "
+        help="Which YOLO model locates the grid. "
              "`seg` predicts a mask and derives corners from it; `pose` regresses "
-             "the four corners directly. Both are ~6 MB against Mask R-CNN's 169 MB.",
+             "the four corners directly. Both are ~6 MB and export to TFLite.",
     )
 
     pipeline = load_pipeline(
-        device, detection_threshold, output_size, yolo_conf, yolo_grid_mode,
+        device, output_size, yolo_conf, yolo_grid_mode,
         source_version(),
     )
 
@@ -299,7 +286,7 @@ if uploaded is not None:
                 badge_err(result.errors["detection"])
             elif result.seg_grid_image is not None:
                 st.image(result.seg_grid_image, use_container_width=True)
-                badge_ok("Mask R-CNN mask + corners")
+                badge_ok("Grid mask + corners")
             else:
                 badge_skip()
 
