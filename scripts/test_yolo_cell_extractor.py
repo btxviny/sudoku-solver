@@ -118,10 +118,8 @@ def run_dataset(model):
 # ── mode 2: single image → solve ─────────────────────────────────────────────
 
 def run_image(model, image_path: str, visualize: bool):
-    from sudoku_solver.digit_classifier import DigitClassifier
     from sudoku_solver.sudoku_solver import SudokuSolver
-    from sudoku_solver.pipeline import SudokuPipeline
-    from sudoku_solver.config import DigitClassifierConfig
+    from sudoku_solver.yolo_digit_classifier import YoloDigitClassifier
 
     img_path = Path(image_path)
     if not img_path.exists():
@@ -145,8 +143,7 @@ def run_image(model, image_path: str, visualize: bool):
     grid_boxes = boxes_to_grid(dets, H, W)
 
     # 3. Load digit classifier
-    cfg = DigitClassifierConfig(model_path=ROOT / "models/weights/xgboost_digit_classifier.model")
-    classifier = DigitClassifier(cfg)
+    classifier = YoloDigitClassifier()
 
     # 4. Classify each filled cell
     puzzle = np.zeros((9, 9), dtype=np.int32)
@@ -163,18 +160,15 @@ def run_image(model, image_path: str, visualize: bool):
         cell_crop = crop(image, box)
         if cell_crop is None or cell_crop.size == 0:
             continue
-        # Preprocess crop to match the format classify() expects:
-        # white digit on black 28×28 (same as pipeline's CNN path does)
-        preprocessed = SudokuPipeline._preprocess_yolo_crop(cell_crop)
-        filled_crops.append(preprocessed)
+        # YoloDigitClassifier takes the raw RGB crop directly.
+        filled_crops.append(cell_crop)
         filled_positions.append((row, col))
 
     if filled_crops:
         # classify_grid expects exactly 81 cells; we only have the filled ones,
         # so call classify() per cell instead.
         for (row, col), cell_crop in zip(filled_positions, filled_crops):
-            digit, _conf, _empty = classifier.classify(cell_crop)
-            puzzle[row, col] = digit if digit != 0 else 0
+            puzzle[row, col] = classifier.classify(cell_crop)
 
     print("\nDetected puzzle:")
     SudokuSolver.print_grid(puzzle)

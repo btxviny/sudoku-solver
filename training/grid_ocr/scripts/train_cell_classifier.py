@@ -23,7 +23,7 @@ from tqdm import tqdm
 PROJECT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT / "src"))
 
-CELL_SIZE = 50          # must match extract_and_label_cells.py and GridOCR.patch_size
+CELL_SIZE = 70          # must match extract_wicht_cells.py and GridOCRConfig.patch_size
 REAL_CELLS_DIR = PROJECT / "data" / "grid_ocr" / "cells"
 OUT_MODEL = PROJECT / "models" / "weights" / "grid_ocr_cnn.pth"
 CKPT_DIR = PROJECT / "training" / "grid_ocr" / "checkpoints"
@@ -34,33 +34,58 @@ CKPT_DIR.mkdir(parents=True, exist_ok=True)
 # Model
 # ---------------------------------------------------------------------------
 
+class _ResBlock(nn.Module):
+    def __init__(self, in_ch: int, out_ch: int, stride: int = 1):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_ch)
+        self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_ch)
+        self.act = nn.GELU()
+        self.skip: nn.Module = (
+            nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_ch),
+            )
+            if (in_ch != out_ch or stride != 1)
+            else nn.Identity()
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.act(self.bn2(self.conv2(self.act(self.bn1(self.conv1(x))))) + self.skip(x))
+
+
 class GridOCRNet(nn.Module):
-    """Lightweight CNN: CELL_SIZE × CELL_SIZE grayscale → 10 logits (0=empty, 1-9=digit)."""
+    """Residual CNN: CELL_SIZE × CELL_SIZE grayscale → 10 logits (0=empty, 1-9=digit).
+
+    4 residual blocks (32→64→128→256) with stride-2 downsampling + GlobalAvgPool.
+    """
 
     def __init__(self, cell_size: int = CELL_SIZE):
         super().__init__()
         self.cell_size = cell_size
-        self.features = nn.Sequential(
-            # Block 1  cell_size → cell_size/2
-            nn.Conv2d(1, 32, 3, padding=1), nn.BatchNorm2d(32), nn.GELU(),
-            nn.Conv2d(32, 32, 3, padding=1), nn.BatchNorm2d(32), nn.GELU(),
-            nn.MaxPool2d(2),
-            # Block 2  /2 → /4
-            nn.Conv2d(32, 64, 3, padding=1), nn.BatchNorm2d(64), nn.GELU(),
-            nn.Conv2d(64, 64, 3, padding=1), nn.BatchNorm2d(64), nn.GELU(),
-            nn.MaxPool2d(2),
-            # Block 3  /4 → /8
-            nn.Conv2d(64, 128, 3, padding=1), nn.BatchNorm2d(128), nn.GELU(),
-            nn.AdaptiveAvgPool2d(4),   # fixed 4×4 regardless of cell_size
-            nn.Flatten(),              # 128 × 16 = 2048
+        self.stem = nn.Sequential(
+            nn.Conv2d(1, 32, 3, padding=1, bias=False),
+            nn.BatchNorm2d(32), nn.GELU(),
         )
+        self.layer1 = _ResBlock(32, 64, stride=2)    # 25×25
+        self.layer2 = _ResBlock(64, 128, stride=2)   # 12×12
+        self.layer3 = _ResBlock(128, 256, stride=2)  # 6×6
+        self.layer4 = _ResBlock(256, 256, stride=1)  # 6×6
+        self.pool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
-            nn.Linear(2048, 256), nn.GELU(), nn.Dropout(0.35),
-            nn.Linear(256, 10),
+            nn.Flatten(),
+            nn.Linear(256, 128), nn.GELU(), nn.Dropout(0.4),
+            nn.Linear(128, 10),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.classifier(self.features(x))
+        x = self.stem(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        return self.classifier(self.pool(x))
 
     def read_grid(self, grid_img: np.ndarray, device: torch.device) -> np.ndarray:
         """Read a single rectified grid image → 9×9 uint8 array.
@@ -90,16 +115,32 @@ class GridOCRNet(nn.Module):
 # ---------------------------------------------------------------------------
 
 class RealCellDataset(Dataset):
-    def __init__(self, root: Path, transform=None):
+    def __init__(self, root: Path, transform=None, split: str = "all", val_frac: float = 0.2, seed: int = 42):
+        """Load real cell crops.
+
+        split='all'   → all images (legacy behaviour)
+        split='train' → 80 % per class, stratified
+        split='val'   → 20 % per class, stratified
+        """
         self.samples: list[tuple[Path, int]] = []
         self.transform = transform
+        rng = random.Random(seed)
         for label in range(10):
             label_dir = root / str(label)
             if not label_dir.exists():
                 continue
-            for p in label_dir.glob("*.jpg"):
+            paths = sorted(label_dir.glob("*.jpg"))
+            if split == "all":
+                chosen = paths
+            else:
+                rng2 = random.Random(seed + label)
+                shuffled = list(paths)
+                rng2.shuffle(shuffled)
+                n_val = max(1, int(len(shuffled) * val_frac))
+                chosen = shuffled[n_val:] if split == "train" else shuffled[:n_val]
+            for p in chosen:
                 self.samples.append((p, label))
-        random.shuffle(self.samples)
+        rng.shuffle(self.samples)
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -108,11 +149,40 @@ class RealCellDataset(Dataset):
         path, label = self.samples[idx]
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         if img is None or img.size == 0:
-            img = np.zeros((CELL_SIZE, CELL_SIZE), dtype=np.uint8)
+            img = np.full((CELL_SIZE, CELL_SIZE), 255, dtype=np.uint8)
         img = cv2.resize(img, (CELL_SIZE, CELL_SIZE), interpolation=cv2.INTER_AREA)
-        t = torch.from_numpy(img).float().unsqueeze(0) / 255.0
+
         if self.transform:
-            t = self.transform(t)
+            # Brightness / contrast jitter on numpy before tensor conversion
+            if random.random() < 0.6:
+                alpha = random.uniform(0.7, 1.35)   # contrast
+                beta = random.randint(-25, 25)       # brightness
+                img = np.clip(alpha * img.astype(np.float32) + beta, 0, 255).astype(np.uint8)
+            # Random Gaussian blur
+            if random.random() < 0.3:
+                k = random.choice([3, 5])
+                img = cv2.GaussianBlur(img, (k, k), 0)
+            # JPEG compression artefacts
+            if random.random() < 0.2:
+                q = random.randint(50, 85)
+                _, enc = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, q])
+                img = cv2.imdecode(enc, cv2.IMREAD_GRAYSCALE)
+
+        t = torch.from_numpy(img).float().unsqueeze(0) / 255.0
+
+        if self.transform:
+            # Tensor-space augmentations
+            t = transforms.functional.affine(
+                t,
+                angle=random.uniform(-8, 8),
+                translate=[int(CELL_SIZE * random.uniform(-0.08, 0.08)),
+                           int(CELL_SIZE * random.uniform(-0.08, 0.08))],
+                scale=random.uniform(0.88, 1.12),
+                shear=random.uniform(-4, 4),
+                fill=1.0,
+            )
+            t = transforms.RandomErasing(p=0.2, scale=(0.02, 0.10))(t)
+
         return t, label
 
 
@@ -120,30 +190,69 @@ class RealCellDataset(Dataset):
 # Synthetic dataset  (generated online — unlimited variety)
 # ---------------------------------------------------------------------------
 
-_CV_FONTS = [
-    cv2.FONT_HERSHEY_SIMPLEX,
-    cv2.FONT_HERSHEY_COMPLEX,
-    cv2.FONT_HERSHEY_DUPLEX,
-    cv2.FONT_HERSHEY_PLAIN,
-    cv2.FONT_HERSHEY_COMPLEX_SMALL,
-]
+def _collect_system_fonts() -> list[str]:
+    """Return unique OTF/TTF paths that PIL can load successfully."""
+    import subprocess
+    try:
+        raw = subprocess.check_output(["fc-list"], text=True)
+    except Exception:
+        return []
+    seen: set[str] = set()
+    paths: list[str] = []
+    for line in raw.splitlines():
+        p = line.split(":")[0].strip()
+        if p.endswith((".otf", ".ttf")) and p not in seen:
+            seen.add(p)
+            paths.append(p)
+    return paths
+
+
+_SYSTEM_FONTS: list[str] = _collect_system_fonts()
 
 
 def _render_digit(digit: int, size: int) -> np.ndarray:
-    """Render a single digit (0=empty white square) on a white background."""
+    """Render a single digit (0=empty white square) on a white background.
+
+    Uses PIL with a random system font so the model sees dozens of typefaces
+    (serif, sans-serif, mono, narrow) rather than just 5 OpenCV faces.
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
     bg_val = random.randint(220, 255)
     canvas = np.ones((size * 3, size * 3), dtype=np.uint8) * bg_val
 
     if digit > 0:
-        font = random.choice(_CV_FONTS)
-        scale = random.uniform(2.0, 3.5) * (size / 50)
-        thick = random.randint(1, 3)
         color = random.randint(0, 40)
+        target_h = int(size * random.uniform(0.55, 0.80))
+        font_size = max(8, int(target_h * 1.3))  # PIL font size > glyph height
+
+        font: ImageFont.ImageFont | ImageFont.FreeTypeFont
+        if _SYSTEM_FONTS and random.random() < 0.92:
+            font_path = random.choice(_SYSTEM_FONTS)
+            try:
+                font = ImageFont.truetype(font_path, font_size)
+            except Exception:
+                font = ImageFont.load_default()
+        else:
+            font = ImageFont.load_default()
+
         txt = str(digit)
-        (tw, th), _ = cv2.getTextSize(txt, font, scale, thick)
-        tx = (canvas.shape[1] - tw) // 2 + random.randint(-3, 3)
-        ty = (canvas.shape[0] + th) // 2 + random.randint(-3, 3)
-        cv2.putText(canvas, txt, (tx, ty), font, scale, color, thick, cv2.LINE_AA)
+        pil_img = Image.fromarray(canvas)
+        draw = ImageDraw.Draw(pil_img)
+
+        # Measure actual bounding box so we can centre precisely.
+        try:
+            bbox = draw.textbbox((0, 0), txt, font=font)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        except Exception:
+            tw, th = font_size, font_size
+
+        cx = canvas.shape[1] // 2
+        cy = canvas.shape[0] // 2
+        tx = cx - tw // 2 + random.randint(-3, 3)
+        ty = cy - th // 2 + random.randint(-3, 3)
+        draw.text((tx, ty), txt, fill=int(color), font=font)
+        canvas = np.array(pil_img)
 
     # Random light grid lines on empty cells sometimes
     if digit == 0 and random.random() < 0.2:
@@ -155,6 +264,15 @@ def _render_digit(digit: int, size: int) -> np.ndarray:
             y = random.randint(0, canvas.shape[0])
             cv2.line(canvas, (0, y), (canvas.shape[1], y), lc, 1)
 
+    return _finish_cell(canvas, size, bg_val)
+
+
+def _finish_cell(canvas: np.ndarray, size: int, bg_val: int) -> np.ndarray:
+    """Rotate, crop, and apply the cell-domain artifacts (borders, noise, blur).
+
+    Shared by the font-rendered and handwritten sources so both land in the
+    same distribution as real extracted cells.
+    """
     # Random rotation
     angle = random.uniform(-8, 8)
     M = cv2.getRotationMatrix2D(
@@ -209,6 +327,106 @@ def _render_digit(digit: int, size: int) -> np.ndarray:
     return canvas
 
 
+MNIST_RAW = PROJECT / "training" / "sudoku_digit_classification" / "mnist_data" / "MNIST" / "raw"
+
+
+def _load_mnist(split: str = "train") -> tuple[np.ndarray, np.ndarray]:
+    """Load MNIST from the local idx files. Returns (images uint8 N×28×28, labels).
+
+    `split` is "train", "test" or "all".  Training uses "train" only so the
+    10k test split stays clean for evaluation — an earlier version trained on
+    both and then "measured" 100 % on data it had already seen.
+
+    Zeros are dropped: in this task class 0 means *empty cell*, not the digit
+    zero, and a sudoku never contains a 0 glyph.
+    """
+    def _read(path: Path, kind: str) -> np.ndarray:
+        raw = np.frombuffer(path.read_bytes(), dtype=np.uint8)
+        if kind == "images":
+            n, rows, cols = (int.from_bytes(raw[i:i + 4], "big") for i in (4, 8, 12))
+            return raw[16:].reshape(n, rows, cols)
+        n = int.from_bytes(raw[4:8], "big")
+        return raw[8:8 + n]
+
+    stems = {"train": ["train"], "test": ["t10k"], "all": ["train", "t10k"]}[split]
+    imgs = np.concatenate([
+        _read(MNIST_RAW / f"{st}-images-idx3-ubyte", "images") for st in stems
+    ])
+    labels = np.concatenate([
+        _read(MNIST_RAW / f"{st}-labels-idx1-ubyte", "labels") for st in stems
+    ])
+    keep = labels > 0
+    return imgs[keep], labels[keep]
+
+
+def _render_handwritten(glyph: np.ndarray, size: int) -> np.ndarray:
+    """Render one MNIST glyph as a sudoku cell: dark ink on light paper.
+
+    MNIST is white-on-black and tightly cropped; real cells are dark ink on
+    paper with the digit occupying roughly 55-80 % of the cell height.  Ballpoint
+    strokes are also lighter and thinner than print, so the ink tone is drawn
+    from a wider, lighter range than the font renderer uses.
+    """
+    bg_val = random.randint(215, 255)
+    canvas = np.ones((size * 3, size * 3), dtype=np.uint8) * bg_val
+
+    ink = 255 - glyph                       # -> dark digit on white
+    ys, xs = np.where(ink < 200)
+    if len(ys) == 0:
+        return _finish_cell(canvas, size, bg_val)
+    ink = ink[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+
+    target_h = int(size * random.uniform(0.55, 0.82))
+    scale = target_h / ink.shape[0]
+    target_w = max(1, int(ink.shape[1] * scale * random.uniform(0.9, 1.1)))
+    ink = cv2.resize(ink, (target_w, target_h), interpolation=cv2.INTER_AREA)
+
+    # Biro is lighter than print: lift the darkest stroke value.
+    ink_floor = random.randint(20, 90)
+    ink = np.clip(ink.astype(np.float32), ink_floor, 255).astype(np.uint8)
+
+    # Vary stroke weight, biased towards thinning.  MNIST is written with a
+    # thick marker; ballpoint on paper is much finer.  That matters for closed
+    # glyphs above all: a thick looped "2" fills its loop in and reads as a "9"
+    # (observed on a real photo, where every looped 2 was misread).  Dilating
+    # the light background thins the dark stroke; eroding thickens it.
+    k = random.choice([0, 0, 1, 1, 1, 2])
+    if k:
+        kernel = np.ones((2 * k + 1, 2 * k + 1), np.uint8)
+        if random.random() < 0.75:
+            ink = cv2.dilate(ink, kernel)     # thinner stroke (biro)
+        else:
+            ink = cv2.erode(ink, kernel)      # bolder stroke
+
+    # Paste into the centre third (that is the region _finish_cell keeps).
+    cy = canvas.shape[0] // 2 + random.randint(-4, 4)
+    cx = canvas.shape[1] // 2 + random.randint(-4, 4)
+    y0 = cy - target_h // 2
+    x0 = cx - target_w // 2
+    region = canvas[y0:y0 + target_h, x0:x0 + target_w]
+    canvas[y0:y0 + target_h, x0:x0 + target_w] = np.minimum(region, ink)
+
+    return _finish_cell(canvas, size, bg_val)
+
+
+class HandwrittenCellDataset(Dataset):
+    """MNIST digits 1-9 rendered into the sudoku-cell domain."""
+
+    def __init__(self, size: int = 40_000, cell_size: int = CELL_SIZE):
+        self.size = size
+        self.cell_size = cell_size
+        self.images, self.labels_src = _load_mnist("train")
+
+    def __len__(self) -> int:
+        return self.size
+
+    def __getitem__(self, idx: int):
+        j = random.randrange(len(self.images))
+        img = _render_handwritten(self.images[j], self.cell_size)
+        t = torch.from_numpy(img).float().unsqueeze(0) / 255.0
+        return t, int(self.labels_src[j])
+
+
 class SyntheticCellDataset(Dataset):
     def __init__(self, size: int = 60_000, cell_size: int = CELL_SIZE):
         self.size = size
@@ -232,39 +450,41 @@ class SyntheticCellDataset(Dataset):
 # ---------------------------------------------------------------------------
 
 def train(
-    epochs: int = 40,
+    epochs: int = 50,
     batch_size: int = 128,
     lr: float = 1e-3,
-    synthetic_size: int = 60_000,
+    synthetic_size: int = 80_000,
+    handwritten_size: int = 60_000,
     num_workers: int = 4,
+    out_model: Path = OUT_MODEL,
 ) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    # Augmentation for real cells
-    real_aug = transforms.Compose([
-        transforms.RandomErasing(p=0.15, scale=(0.02, 0.08)),
-    ])
-
-    real_ds = RealCellDataset(REAL_CELLS_DIR, transform=real_aug)
+    real_train_ds = RealCellDataset(REAL_CELLS_DIR, transform=True, split="train")
+    real_val_ds = RealCellDataset(REAL_CELLS_DIR, split="val")
     synth_ds = SyntheticCellDataset(size=synthetic_size)
+    hand_ds = HandwrittenCellDataset(size=handwritten_size) if handwritten_size else None
 
-    if len(real_ds) == 0:
+    if len(real_train_ds) == 0:
         print("WARNING: No real cell data found. Run extract_and_label_cells.py first.")
         print("Training on synthetic data only.")
         train_ds = synth_ds
     else:
-        print(f"Real cells: {len(real_ds):,}   Synthetic: {len(synth_ds):,}")
-        train_ds = ConcatDataset([real_ds, synth_ds])
+        parts = [real_train_ds, synth_ds]
+        if hand_ds is not None:
+            parts.append(hand_ds)
+        print(f"Real train: {len(real_train_ds):,}   Real val: {len(real_val_ds):,}   "
+              f"Synthetic: {len(synth_ds):,}   Handwritten: {len(hand_ds) if hand_ds else 0:,}")
+        train_ds = ConcatDataset(parts)
 
     loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=True,
         num_workers=num_workers, pin_memory=device.type == "cuda",
     )
 
-    val_ds = RealCellDataset(REAL_CELLS_DIR)  # re-use real data as quick sanity val
-    val_loader = DataLoader(val_ds, batch_size=256, shuffle=False, num_workers=2) \
-        if len(val_ds) > 0 else None
+    val_loader = DataLoader(real_val_ds, batch_size=256, shuffle=False, num_workers=2) \
+        if len(real_val_ds) > 0 else None
 
     model = GridOCRNet(cell_size=CELL_SIZE).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
@@ -320,11 +540,11 @@ def train(
     best_ckpt = CKPT_DIR / "best.pth"
     if best_ckpt.exists():
         import shutil
-        shutil.copy(best_ckpt, OUT_MODEL)
-        print(f"\nBest model saved to {OUT_MODEL}")
+        shutil.copy(best_ckpt, out_model)
+        print(f"\nBest model saved to {out_model}")
     else:
-        torch.save(model.state_dict(), OUT_MODEL)
-        print(f"\nFinal model saved to {OUT_MODEL}")
+        torch.save(model.state_dict(), out_model)
+        print(f"\nFinal model saved to {out_model}")
 
 
 if __name__ == "__main__":
@@ -333,6 +553,9 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--synthetic_size", type=int, default=60_000)
+    parser.add_argument("--handwritten_size", type=int, default=40_000,
+                        help="MNIST-derived handwritten cells per epoch (0 disables)")
     parser.add_argument("--num_workers", type=int, default=4)
+    parser.add_argument("--out_model", type=Path, default=OUT_MODEL)
     args = parser.parse_args()
     train(**vars(args))

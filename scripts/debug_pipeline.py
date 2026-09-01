@@ -2,8 +2,8 @@
 Debug the full pipeline on the Roboflow training set.
 
 Runs each stage independently so failures can be pinned to the exact step:
-  1. Grid detection  (Mask R-CNN + Hough)
-  2. Digit reading   (GridOCR or CellExtractor+DigitClassifier)
+  1. Grid detection  (YOLOv8n seg/pose + warp)
+  2. Digit reading   (GridOCR)
   3. Constraint check (detected clues valid before solving)
   4. Solving         (OR-Tools CP-SAT)
 
@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from sudoku_solver.config import PipelineConfig
-from sudoku_solver.grid_detector import GridDetector
+from sudoku_solver.yolo_grid_detector import YoloGridDetector
 from sudoku_solver.sudoku_solver import SudokuSolver
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -57,24 +57,19 @@ class ImageResult:
 
 
 def load_digit_reader(cfg: PipelineConfig):
-    """Return (grid_ocr | None, cell_extractor | None, digit_classifier | None)."""
+    """Return the GridOCR reader, which this script requires."""
     from pathlib import Path as P
-    model_path = P(cfg.grid_ocr.model_path)
-    if model_path.exists():
-        from sudoku_solver.grid_ocr import GridOCR
-        return GridOCR(cfg.grid_ocr), None, None
-    from sudoku_solver.cell_extractor import CellExtractor
-    from sudoku_solver.digit_classifier import DigitClassifier
-    return None, CellExtractor(cfg.cell_extractor), DigitClassifier(cfg.digit_classifier)
+    if not P(cfg.grid_ocr.model_path).exists():
+        raise SystemExit(
+            f"GridOCR weights not found: {cfg.grid_ocr.model_path}\n"
+            "This script reads digits with GridOCR."
+        )
+    from sudoku_solver.grid_ocr import GridOCR
+    return GridOCR(cfg.grid_ocr)
 
 
-def read_digits(grid_ocr, extractor, classifier, rectified: np.ndarray):
-    if grid_ocr is not None:
-        puzzle, probs = grid_ocr.read_with_probs(rectified)
-        return puzzle, probs
-    cells = extractor.extract(rectified)
-    puzzle = classifier.classify_grid(cells)
-    return puzzle, None
+def read_digits(grid_ocr, rectified: np.ndarray):
+    return grid_ocr.read_with_probs(rectified)
 
 
 # ── visualisation ─────────────────────────────────────────────────────────────
@@ -199,11 +194,10 @@ def run(data_dir: Path, limit: int | None, out_root: Path) -> None:
 
     cfg = PipelineConfig()
     print("Loading models…")
-    detector = GridDetector(cfg.grid_detector)
-    grid_ocr, extractor, classifier = load_digit_reader(cfg)
+    detector = YoloGridDetector(cfg.yolo_grid_detector)
+    grid_ocr = load_digit_reader(cfg)
     solver = SudokuSolver()
-    reader_name = "GridOCR" if grid_ocr else "CellExtractor+XGBoost"
-    print(f"Digit reader: {reader_name}\n")
+    print("Digit reader: GridOCR\n")
 
     stage_dirs = {s: out_root / s.value for s in Stage}
     for d in stage_dirs.values():
@@ -232,7 +226,7 @@ def run(data_dir: Path, limit: int | None, out_root: Path) -> None:
 
         # ── Stage 2: digit reading ────────────────────────────────────────
         try:
-            puzzle, probs = read_digits(grid_ocr, extractor, classifier, rectified)
+            puzzle, probs = read_digits(grid_ocr, rectified)
             res.puzzle = puzzle
             res.n_clues = int((puzzle != 0).sum())
         except Exception as e:

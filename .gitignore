@@ -56,6 +56,7 @@ models/
 *.onnx
 *.ckpt
 *.safetensors
+*.tflite
 
 # Logs and outputs
 *.log

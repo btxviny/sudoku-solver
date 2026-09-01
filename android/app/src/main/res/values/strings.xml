@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">Sudoku Solver</string>
+    <string name="subtitle">Take or choose a photo of a sudoku puzzle</string>
+    <string name="take_photo">Take photo</string>
+    <string name="pick_image">Choose image</string>
+    <string name="solving">Solving…</string>
+    <string name="photo_preview">Uploaded photo</string>
+    <string name="grid_preview">Rectified sudoku grid</string>
+    <string name="step1_label">1  ·  Photo</string>
+    <string name="step2_label">2  ·  Grid Detection</string>
+    <string name="step3_label">3  ·  Recognition</string>
+    <string name="step4_label">4  ·  Solution</string>
+    <string name="solution_caption">Blue = clues · Red = solved</string>
+    <string name="edit_recognition">Edit ✏</string>
+    <string name="done_editing">Done ✓</string>
+    <string name="number_pad_hint">Tap a cell, then a digit  ·  orange = your edit</string>
+    <string name="clear_cell">Clear (0)</string>
+    <string name="resolve_button">Re-solve</string>
+</resources>

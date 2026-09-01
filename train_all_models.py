@@ -34,19 +34,14 @@ def train_grid_ocr(steps: list[str]) -> bool:
     )
 
 
-def train_segmentation(steps: list[str]) -> bool:
-    if "all" not in steps and "segmentation" not in steps:
+
+def train_grid_seg(steps: list[str]) -> bool:
+    if "all" not in steps and "grid_seg" not in steps:
         return True
     print("=" * 60)
-    print("STEP 2: TRAINING MASK R-CNN GRID DETECTOR")
+    print("STEP 2: TRAINING YOLOv8n-seg GRID DETECTOR")
     print("=" * 60)
-    return _run(
-        "training/segmentation/scripts/train_maskrcnn.py",
-        "--data_root", "data/segmentation/segmentation_dataset",
-        "--output_dir", "models/weights",
-        "--num_epochs", "10",
-        "--batch_size", "2",
-    )
+    return _run("training/grid_seg/train.py")
 
 
 def main():
@@ -54,7 +49,7 @@ def main():
     parser.add_argument(
         "--steps",
         nargs="+",
-        choices=["grid_ocr", "segmentation", "all"],
+        choices=["grid_ocr", "grid_seg", "all"],
         default=["all"],
         help="Which models to train (default: all)",
     )
@@ -66,7 +61,7 @@ def main():
 
     tasks = [
         ("GridOCRNet digit classifier", train_grid_ocr),
-        ("Mask R-CNN grid detector", train_segmentation),
+        ("YOLOv8n-seg grid detector", train_grid_seg),
     ]
 
     passed = sum(fn(args.steps) for _, fn in tasks)
