@@ -23,7 +23,7 @@ from tqdm import tqdm
 PROJECT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT / "src"))
 
-CELL_SIZE = 50          # must match extract_and_label_cells.py and GridOCR.patch_size
+CELL_SIZE = 70          # must match extract_wicht_cells.py and GridOCRConfig.patch_size
 REAL_CELLS_DIR = PROJECT / "data" / "grid_ocr" / "cells"
 OUT_MODEL = PROJECT / "models" / "weights" / "grid_ocr_cnn.pth"
 CKPT_DIR = PROJECT / "training" / "grid_ocr" / "checkpoints"
@@ -149,11 +149,40 @@ class RealCellDataset(Dataset):
         path, label = self.samples[idx]
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         if img is None or img.size == 0:
-            img = np.zeros((CELL_SIZE, CELL_SIZE), dtype=np.uint8)
+            img = np.full((CELL_SIZE, CELL_SIZE), 255, dtype=np.uint8)
         img = cv2.resize(img, (CELL_SIZE, CELL_SIZE), interpolation=cv2.INTER_AREA)
-        t = torch.from_numpy(img).float().unsqueeze(0) / 255.0
+
         if self.transform:
-            t = self.transform(t)
+            # Brightness / contrast jitter on numpy before tensor conversion
+            if random.random() < 0.6:
+                alpha = random.uniform(0.7, 1.35)   # contrast
+                beta = random.randint(-25, 25)       # brightness
+                img = np.clip(alpha * img.astype(np.float32) + beta, 0, 255).astype(np.uint8)
+            # Random Gaussian blur
+            if random.random() < 0.3:
+                k = random.choice([3, 5])
+                img = cv2.GaussianBlur(img, (k, k), 0)
+            # JPEG compression artefacts
+            if random.random() < 0.2:
+                q = random.randint(50, 85)
+                _, enc = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, q])
+                img = cv2.imdecode(enc, cv2.IMREAD_GRAYSCALE)
+
+        t = torch.from_numpy(img).float().unsqueeze(0) / 255.0
+
+        if self.transform:
+            # Tensor-space augmentations
+            t = transforms.functional.affine(
+                t,
+                angle=random.uniform(-8, 8),
+                translate=[int(CELL_SIZE * random.uniform(-0.08, 0.08)),
+                           int(CELL_SIZE * random.uniform(-0.08, 0.08))],
+                scale=random.uniform(0.88, 1.12),
+                shear=random.uniform(-4, 4),
+                fill=1.0,
+            )
+            t = transforms.RandomErasing(p=0.2, scale=(0.02, 0.10))(t)
+
         return t, label
 
 
@@ -432,12 +461,7 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    # Augmentation for real cells
-    real_aug = transforms.Compose([
-        transforms.RandomErasing(p=0.15, scale=(0.02, 0.08)),
-    ])
-
-    real_train_ds = RealCellDataset(REAL_CELLS_DIR, transform=real_aug, split="train")
+    real_train_ds = RealCellDataset(REAL_CELLS_DIR, transform=True, split="train")
     real_val_ds = RealCellDataset(REAL_CELLS_DIR, split="val")
     synth_ds = SyntheticCellDataset(size=synthetic_size)
     hand_ds = HandwrittenCellDataset(size=handwritten_size) if handwritten_size else None

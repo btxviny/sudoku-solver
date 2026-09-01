@@ -23,7 +23,7 @@ def resolve(path: Path | str) -> Path:
 class GridOCRConfig:
     """Configuration for the GridOCR CNN digit reader."""
     model_path: Path = field(default_factory=lambda: WEIGHTS_DIR / "grid_ocr_cnn.pth")
-    patch_size: int = 50   # cell size in pixels (grid output_size / 9)
+    patch_size: int = 70   # cell size in pixels (grid output_size / 9)
 
     def __post_init__(self):
         self.model_path = resolve(self.model_path)
@@ -72,7 +72,7 @@ class YoloGridDetectorConfig:
     model_path: Path | None = None
     conf: float = 0.25
     imgsz: int = 640
-    output_size: int = 450
+    output_size: int = 630
     resize_to: tuple[int, int] = (1024, 1024)
     refine: bool = False
 

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import streamlit as st
 from PIL import Image
 
@@ -17,6 +18,7 @@ try:
         YoloGridDetectorConfig,
     )
     from sudoku_solver.pipeline import PipelineResult, SudokuPipeline
+    from sudoku_solver.sudoku_solver import SudokuSolver
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
     from sudoku_solver.config import (
@@ -25,6 +27,7 @@ except ImportError:
         YoloGridDetectorConfig,
     )
     from sudoku_solver.pipeline import PipelineResult, SudokuPipeline
+    from sudoku_solver.sudoku_solver import SudokuSolver
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -161,6 +164,14 @@ def badge_skip() -> None:
     )
 
 
+def _safe_int(v) -> int:
+    """Convert a data_editor cell value to a clamped integer (0–9)."""
+    try:
+        return max(0, min(9, int(v)))
+    except (TypeError, ValueError):
+        return 0
+
+
 def format_timing(timing: dict[str, float]) -> str:
     lines = []
     for k, v in timing.items():
@@ -239,11 +250,26 @@ with st.sidebar:
 st.title("🧩 Sudoku Solver")
 st.write("Upload a photo of a sudoku puzzle and press **Solve** to get the solution.")
 
+# ── Session state ─────────────────────────────────────────────────────────────
+# Results live in session_state so they survive reruns triggered by the edit
+# widgets below.  They are cleared whenever a new file is uploaded.
+for _key, _default in (("result", None), ("edit_version", 0)):
+    if _key not in st.session_state:
+        st.session_state[_key] = _default
+
 uploaded = st.file_uploader(
     "Upload sudoku image",
     type=["jpg", "jpeg", "png", "bmp", "webp"],
     label_visibility="collapsed",
 )
+
+# Reset stored results when the user picks a different file.
+if uploaded is not None:
+    _sig = (uploaded.name, uploaded.size)
+    if st.session_state.get("_last_upload") != _sig:
+        st.session_state.result = None
+        st.session_state.edit_version = 0
+        st.session_state["_last_upload"] = _sig
 
 if uploaded is not None:
     image = Image.open(uploaded).convert("RGB")
@@ -255,12 +281,15 @@ if uploaded is not None:
         with st.spinner("Running pipeline…"):
             img_array = np.array(image)
             try:
-                result: PipelineResult = pipeline.run_path(img_array, selected)
+                st.session_state.result = pipeline.run_path(img_array, selected)
+                st.session_state.edit_version += 1
             except Exception as e:
                 st.error(f"Unexpected error: {e}")
                 st.exception(e)
                 st.stop()
 
+    result: PipelineResult | None = st.session_state.result
+    if result is not None:
         detection_failed = "detection" in result.errors
         ocr_failed = "ocr" in result.errors
         solving_failed = "solving" in result.errors
@@ -276,7 +305,8 @@ if uploaded is not None:
             st.error("Could not find a valid solution — the clues below were misread. "
                      "Try another pipeline mode, or a sharper, straighter photo.")
 
-        col1, col2, col3, col4 = st.columns(4)
+        # Cols 1&2 are narrow (detection images); 3&4 are wide (edit + solution).
+        col1, col2, col3, col4 = st.columns([1, 1, 2, 2])
 
         # ── Step 1: Grid / cell detection ────────────────────────────────
         with col1:
@@ -301,42 +331,74 @@ if uploaded is not None:
             else:
                 badge_skip()
 
-        # ── Step 3: Recognition ───────────────────────────────────────────
+        # ── Step 3: Recognition — editable in place ───────────────────────
+        # The data_editor IS the recognition display.  The user clicks any cell
+        # and types a corrected digit; col4 re-solves automatically on every edit.
+        edited_puzzle: np.ndarray | None = None
         with col3:
             step_label(3, "Recognition")
             if detection_failed:
                 badge_skip()
             elif ocr_failed:
                 badge_err(result.errors["ocr"])
-            elif result.recognition_image is not None and result.original_grid is not None:
-                st.image(result.recognition_image, use_container_width=True)
+            elif result.original_grid is not None:
                 n_clues = int((result.original_grid > 0).sum())
-                badge_ok(f"{n_clues} clues  ·  GridOCR CNN")
+                badge_ok(f"{n_clues} clues  ·  click any cell to correct")
+
+                df = pd.DataFrame(
+                    result.original_grid.astype(int),
+                    columns=[str(c) for c in range(9)],
+                )
+                edited_df = st.data_editor(
+                    df,
+                    use_container_width=True,
+                    hide_index=True,
+                    # Fresh key each solve so stale edits from a previous image
+                    # never carry over.
+                    key=f"puzzle_edit_{st.session_state.edit_version}",
+                    column_config={
+                        str(c): st.column_config.NumberColumn(
+                            label="",
+                            min_value=0,
+                            max_value=9,
+                            step=1,
+                            format="%d",
+                            width="small",
+                        )
+                        for c in range(9)
+                    },
+                )
+                edited_puzzle = np.array(
+                    [[_safe_int(edited_df.iloc[r, c]) for c in range(9)]
+                     for r in range(9)]
+                )
             else:
                 badge_skip()
 
-        # ── Step 4: Solution ──────────────────────────────────────────────
+        # ── Step 4: Solution — auto-updates whenever col3 changes ────────
         with col4:
             step_label(4, "Solution")
-            if detection_failed or ocr_failed:
+            if detection_failed or ocr_failed or edited_puzzle is None:
                 badge_skip()
-            elif solving_failed:
-                if result.original_grid is not None:
+            else:
+                try:
+                    sol, t = SudokuSolver().solve(edited_puzzle)
+                    st.caption("Blue = clues · Red = solved")
                     st.html(render_grid(
-                        result.original_grid, result.original_grid,
+                        edited_puzzle, sol,
+                        cell_px=44,
+                        clue_color="#0066cc",
+                        new_color="#cc0000",
+                    ))
+                    badge_ok(f"Solved · {t * 1000:.0f} ms")
+                except (ValueError, RuntimeError) as exc:
+                    # Puzzle is invalid mid-edit — show clues-only and a hint.
+                    st.html(render_grid(
+                        edited_puzzle, edited_puzzle,
+                        cell_px=44,
                         clue_color="#0066cc",
                     ))
-                    st.caption("Clues only — solver failed")
-                badge_err(result.errors["solving"])
-            elif result.solved_grid is not None and result.original_grid is not None:
-                st.caption("Blue = clues · Red = solved")
-                st.html(render_grid(
-                    result.original_grid, result.solved_grid,
-                    clue_color="#0066cc", new_color="#cc0000",
-                ))
-                badge_ok("Solved")
-            else:
-                badge_skip()
+                    badge_err(str(exc) or "Invalid — check your edits")
 
         if result.timing:
             with st.expander("Timing", expanded=False):
