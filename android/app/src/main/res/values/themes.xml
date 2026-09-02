@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SudokuSolver" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Navy blue brand palette -->
+        <item name="colorPrimary">#1B3A6B</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#D6E4FF</item>
+        <item name="colorOnPrimaryContainer">#001B45</item>
+
+        <item name="colorSecondary">#4A5E80</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#D4E3FF</item>
+        <item name="colorOnSecondaryContainer">#021B3E</item>
+
+        <item name="colorSurface">#F7F9FF</item>
+        <item name="colorOnSurface">#191C20</item>
+        <item name="colorSurfaceVariant">#E1E3EE</item>
+        <item name="colorOnSurfaceVariant">#44474E</item>
+
+        <item name="android:colorBackground">#F4F6FC</item>
+
+        <item name="colorError">#C0392B</item>
+        <item name="colorOnError">#FFFFFF</item>
+
+        <!-- Rounded cards -->
+        <item name="materialCardViewStyle">@style/Widget.Material3.CardView.Elevated</item>
+    </style>
+</resources>

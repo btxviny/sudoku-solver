@@ -75,7 +75,7 @@ class GridOCRNet(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(256, 128), nn.GELU(), nn.Dropout(0.4),
+            nn.Linear(256, 128), nn.LayerNorm(128), nn.GELU(), nn.Dropout(0.4),
             nn.Linear(128, 10),
         )
 
@@ -328,35 +328,59 @@ def _finish_cell(canvas: np.ndarray, size: int, bg_val: int) -> np.ndarray:
 
 
 MNIST_RAW = PROJECT / "training" / "sudoku_digit_classification" / "mnist_data" / "MNIST" / "raw"
+MNIST_JPG_LABELS = PROJECT / "training" / "data" / "digit_classification" / "digits" / "labels.txt"
 
 
 def _load_mnist(split: str = "train") -> tuple[np.ndarray, np.ndarray]:
-    """Load MNIST from the local idx files. Returns (images uint8 N×28×28, labels).
+    """Load MNIST images (uint8, N×28×28) and labels (1-9, zeros dropped).
 
-    `split` is "train", "test" or "all".  Training uses "train" only so the
-    10k test split stays clean for evaluation — an earlier version trained on
-    both and then "measured" 100 % on data it had already seen.
-
-    Zeros are dropped: in this task class 0 means *empty cell*, not the digit
-    zero, and a sudoku never contains a 0 glyph.
+    Tries IDX binary files first; falls back to the pre-extracted JPGs in
+    training/data/digit_classification/digits/ when the IDX files are absent.
+    The JPG fallback uses all 60k samples regardless of `split`.
     """
-    def _read(path: Path, kind: str) -> np.ndarray:
-        raw = np.frombuffer(path.read_bytes(), dtype=np.uint8)
-        if kind == "images":
-            n, rows, cols = (int.from_bytes(raw[i:i + 4], "big") for i in (4, 8, 12))
-            return raw[16:].reshape(n, rows, cols)
-        n = int.from_bytes(raw[4:8], "big")
-        return raw[8:8 + n]
+    if MNIST_RAW.exists():
+        def _read(path: Path, kind: str) -> np.ndarray:
+            raw = np.frombuffer(path.read_bytes(), dtype=np.uint8)
+            if kind == "images":
+                n, rows, cols = (int.from_bytes(raw[i:i + 4], "big") for i in (4, 8, 12))
+                return raw[16:].reshape(n, rows, cols)
+            n = int.from_bytes(raw[4:8], "big")
+            return raw[8:8 + n]
 
-    stems = {"train": ["train"], "test": ["t10k"], "all": ["train", "t10k"]}[split]
-    imgs = np.concatenate([
-        _read(MNIST_RAW / f"{st}-images-idx3-ubyte", "images") for st in stems
-    ])
-    labels = np.concatenate([
-        _read(MNIST_RAW / f"{st}-labels-idx1-ubyte", "labels") for st in stems
-    ])
-    keep = labels > 0
-    return imgs[keep], labels[keep]
+        stems = {"train": ["train"], "test": ["t10k"], "all": ["train", "t10k"]}[split]
+        imgs = np.concatenate([
+            _read(MNIST_RAW / f"{st}-images-idx3-ubyte", "images") for st in stems
+        ])
+        labels = np.concatenate([
+            _read(MNIST_RAW / f"{st}-labels-idx1-ubyte", "labels") for st in stems
+        ])
+        keep = labels > 0
+        return imgs[keep], labels[keep]
+
+    # Fallback: load from pre-extracted JPGs (mnist_*.jpg entries in labels.txt).
+    imgs_list, labels_list = [], []
+    img_dir = MNIST_JPG_LABELS.parent / "images"
+    for line in MNIST_JPG_LABELS.read_text().splitlines():
+        if not line.strip():
+            continue
+        rel_path, label_str = line.rsplit(",", 1)
+        label = int(label_str)
+        if label == 0:  # digit zero has no class in sudoku OCR
+            continue
+        fname = Path(rel_path).name
+        if not fname.startswith("mnist_"):
+            continue
+        img_path = img_dir / fname
+        if not img_path.exists():
+            continue
+        img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            continue
+        img = cv2.resize(img, (28, 28), interpolation=cv2.INTER_AREA)
+        imgs_list.append(img)
+        labels_list.append(label)
+
+    return np.stack(imgs_list), np.array(labels_list, dtype=np.uint8)
 
 
 def _render_handwritten(glyph: np.ndarray, size: int) -> np.ndarray:

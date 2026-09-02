@@ -431,8 +431,9 @@ def recover_with_constraints(
 ) -> tuple[np.ndarray, np.ndarray, float]:
     """Fix OCR errors by substituting alternative digit predictions.
 
-    Tries 1–3 substitutions on the least-confident cells, then falls back to
-    zeroing cells below a confidence threshold so the solver can fill them.
+    Tries 1–5 substitutions on the least-confident cells using two candidate
+    selection strategies, then falls back to zeroing cells below a confidence
+    threshold so the solver can fill them.
     """
     candidates: list[list[int]] = []
     top1_confs: list[float] = []
@@ -440,21 +441,39 @@ def recover_with_constraints(
     for i in range(81):
         ranked = sorted(range(10), key=lambda d, i=i: -probs[i, d])
         top1_confs.append(float(probs[i, ranked[0]]))
+        # Include top-3 alternatives, including class 0 (empty) for digit cells.
+        # A digit predicted in an empty cell of a half-filled puzzle is a real
+        # OCR error that can only be fixed by allowing the empty alternative.
         alts = [d for d in ranked[1:4] if probs[i, d] >= 0.03]
-        if flat[i] > 0:
-            alts = [d for d in alts if d != 0]
         candidates.append(alts)
 
-    uncertain_idx = [
-        i for i in range(81)
-        if candidates[i] and top1_confs[i] < 0.60
-    ]
-    uncertain_idx.sort(key=lambda i: top1_confs[i])
+    # Threshold-based: any cell below 0.60 with at least one alternative.
+    uncertain_thresh = sorted(
+        [i for i in range(81) if candidates[i] and top1_confs[i] < 0.60],
+        key=lambda i: top1_confs[i],
+    )
+
+    # Percentile-based: worst 85% of digit-predicted cells, so the only cells
+    # excluded are the very most confident ones.  For sparse (half-filled)
+    # grids this beats a fixed fraction of all 81 cells because the low-
+    # confidence tail is dominated by empty-cell predictions that crowd out
+    # genuine misread digits sitting at 0.68 confidence.
+    digit_cells_sorted = sorted(
+        [i for i in range(81) if flat[i] > 0 and candidates[i]],
+        key=lambda i: top1_confs[i],
+    )
+    n_digit_pct = max(8, int(len(digit_cells_sorted) * 0.85))
+    uncertain_pct = digit_cells_sorted[:n_digit_pct]
+
+    uncertain_idx = sorted(
+        set(uncertain_thresh) | set(uncertain_pct),
+        key=lambda i: top1_confs[i],
+    )
 
     base = puzzle.flatten().astype(np.uint8)
     t0 = time.perf_counter()
-    for n_flip in (1, 2, 3):
-        for combo in itertools.combinations(uncertain_idx[:12], n_flip):
+    for n_flip in (1, 2, 3, 4, 5):
+        for combo in itertools.combinations(uncertain_idx[:20], n_flip):
             alt_lists = [candidates[i] for i in combo]
             for alt_digits in itertools.product(*alt_lists):
                 candidate = base.copy()

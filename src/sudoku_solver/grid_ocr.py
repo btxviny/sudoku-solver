@@ -61,7 +61,7 @@ class GridOCRNet(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(256, 128), nn.GELU(), nn.Dropout(0.4),
+            nn.Linear(256, 128), nn.LayerNorm(128), nn.GELU(), nn.Dropout(0.4),
             nn.Linear(128, 10),
         )
 

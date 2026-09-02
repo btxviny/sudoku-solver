@@ -92,7 +92,7 @@
   },
   {
     "file": "gridocr.tflite",
-    "size_mb": 9.7,
+    "size_mb": 9.71,
     "inputs": [
       {
         "name": "serving_default_args_0",
