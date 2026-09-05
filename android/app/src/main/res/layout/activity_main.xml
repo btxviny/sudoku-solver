@@ -1,19 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Root is a FrameLayout so the progress spinner can float centred over the
-  whole screen independently of the scroll / number-pad split below.
--->
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground">
 
-    <!--
-      Main column: scrollable step cards on top, number pad pinned to the
-      bottom when editing.  The NestedScrollView takes all remaining height
-      via layout_weight so the number pad never covers content.
-    -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -28,77 +20,139 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingHorizontal="12dp"
-                android:paddingTop="20dp"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="28dp"
                 android:paddingBottom="24dp">
 
-                <!-- ── Header ─────────────────────────────────────────────── -->
+                <!-- ── Header ──────────────────────────────────────────── -->
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/app_name"
                     android:textAppearance="?attr/textAppearanceHeadlineMedium"
+                    android:textColor="?attr/colorPrimary"
                     android:gravity="center"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:letterSpacing="-0.02" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/subtitle"
                     android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:gravity="center"
-                    android:alpha="0.6"
                     android:layout_marginTop="4dp"
-                    android:layout_marginBottom="20dp" />
+                    android:layout_marginBottom="24dp" />
 
-                <!-- ── Action buttons ──────────────────────────────────────── -->
+                <!-- ── Action buttons ──────────────────────────────────── -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:layout_marginBottom="16dp">
+                    android:layout_marginBottom="20dp">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/cameraButton"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="52dp"
                         android:layout_weight="1"
                         android:layout_marginEnd="6dp"
-                        android:text="@string/take_photo" />
+                        android:text="@string/take_photo"
+                        android:textSize="14sp"
+                        app:icon="@drawable/ic_camera"
+                        app:iconGravity="textStart"
+                        app:iconPadding="6dp"
+                        app:cornerRadius="14dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/galleryButton"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="52dp"
                         android:layout_weight="1"
                         android:layout_marginStart="6dp"
-                        android:text="@string/pick_image" />
+                        android:text="@string/pick_image"
+                        android:textSize="14sp"
+                        app:icon="@drawable/ic_image"
+                        app:iconGravity="textStart"
+                        app:iconPadding="6dp"
+                        app:cornerRadius="14dp" />
 
                 </LinearLayout>
 
-                <!-- ── Status ─────────────────────────────────────────────── -->
+                <!-- ── Digit reader picker ─────────────────────────────── -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/reader_label"
+                    android:textAppearance="?attr/textAppearanceLabelSmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:gravity="center"
+                    android:layout_marginBottom="6dp" />
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/readerToggle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginBottom="6dp"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/readerGridOcr"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="42dp"
+                        android:text="@string/reader_grid_ocr"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/readerCellOcr"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="42dp"
+                        android:text="@string/reader_cell_ocr"
+                        android:textSize="13sp" />
+
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                <TextView
+                    android:id="@+id/readerHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:gravity="center"
+                    android:layout_marginBottom="18dp" />
+
+                <!-- ── Status chip ─────────────────────────────────────── -->
                 <TextView
                     android:id="@+id/status"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:gravity="center"
                     android:layout_marginBottom="16dp" />
 
-                <!-- ── Step 1: Photo ──────────────────────────────────────── -->
+                <!-- ── Step 1: Photo ───────────────────────────────────── -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    app:cardElevation="1dp"
-                    app:cardCornerRadius="12dp">
+                    android:layout_marginBottom="10dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="?attr/colorSurfaceVariant"
+                    app:cardCornerRadius="16dp"
+                    app:cardBackgroundColor="?attr/colorSurface">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="14dp">
+                        android:padding="16dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -107,21 +161,30 @@
                             android:gravity="center_vertical">
 
                             <TextView
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:text="1"
+                                android:textColor="?attr/colorOnPrimary"
+                                android:textSize="12sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:background="@drawable/bg_step_circle"
+                                android:layout_marginEnd="10dp" />
+
+                            <TextView
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="@string/step1_label"
-                                android:textSize="10sp"
+                                android:textSize="13sp"
                                 android:textStyle="bold"
-                                android:letterSpacing="0.12"
-                                android:textAllCaps="true"
-                                android:alpha="0.55" />
+                                android:textColor="?attr/colorOnSurface" />
 
                             <TextView
                                 android:id="@+id/badge1"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:textSize="13sp"
+                                android:textSize="16sp"
                                 android:textStyle="bold" />
 
                         </LinearLayout>
@@ -132,25 +195,30 @@
                             android:layout_height="180dp"
                             android:scaleType="centerCrop"
                             android:visibility="gone"
-                            android:layout_marginTop="10dp"
+                            android:layout_marginTop="12dp"
+                            android:background="@drawable/bg_image_rounded"
+                            android:clipToOutline="true"
                             android:contentDescription="@string/photo_preview" />
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- ── Step 2: Grid Detection ─────────────────────────────── -->
+                <!-- ── Step 2: Grid Detection ──────────────────────────── -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    app:cardElevation="1dp"
-                    app:cardCornerRadius="12dp">
+                    android:layout_marginBottom="10dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="?attr/colorSurfaceVariant"
+                    app:cardCornerRadius="16dp"
+                    app:cardBackgroundColor="?attr/colorSurface">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="14dp">
+                        android:padding="16dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -159,21 +227,30 @@
                             android:gravity="center_vertical">
 
                             <TextView
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:text="2"
+                                android:textColor="?attr/colorOnPrimary"
+                                android:textSize="12sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:background="@drawable/bg_step_circle"
+                                android:layout_marginEnd="10dp" />
+
+                            <TextView
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="@string/step2_label"
-                                android:textSize="10sp"
+                                android:textSize="13sp"
                                 android:textStyle="bold"
-                                android:letterSpacing="0.12"
-                                android:textAllCaps="true"
-                                android:alpha="0.55" />
+                                android:textColor="?attr/colorOnSurface" />
 
                             <TextView
                                 android:id="@+id/badge2"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:textSize="13sp"
+                                android:textSize="16sp"
                                 android:textStyle="bold" />
 
                         </LinearLayout>
@@ -185,25 +262,28 @@
                             android:adjustViewBounds="true"
                             android:scaleType="fitCenter"
                             android:visibility="gone"
-                            android:layout_marginTop="10dp"
+                            android:layout_marginTop="12dp"
                             android:contentDescription="@string/grid_preview" />
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- ── Step 3: Recognition ────────────────────────────────── -->
+                <!-- ── Step 3: Recognition ─────────────────────────────── -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    app:cardElevation="1dp"
-                    app:cardCornerRadius="12dp">
+                    android:layout_marginBottom="10dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="?attr/colorSurfaceVariant"
+                    app:cardCornerRadius="16dp"
+                    app:cardBackgroundColor="?attr/colorSurface">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="14dp">
+                        android:padding="16dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -212,17 +292,25 @@
                             android:gravity="center_vertical">
 
                             <TextView
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:text="3"
+                                android:textColor="?attr/colorOnPrimary"
+                                android:textSize="12sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:background="@drawable/bg_step_circle"
+                                android:layout_marginEnd="10dp" />
+
+                            <TextView
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="@string/step3_label"
-                                android:textSize="10sp"
+                                android:textSize="13sp"
                                 android:textStyle="bold"
-                                android:letterSpacing="0.12"
-                                android:textAllCaps="true"
-                                android:alpha="0.55" />
+                                android:textColor="?attr/colorOnSurface" />
 
-                            <!-- Edit toggle — appears after recognition succeeds -->
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/editButton"
                                 style="@style/Widget.Material3.Button.TextButton"
@@ -237,7 +325,7 @@
                                 android:id="@+id/badge3"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:textSize="13sp"
+                                android:textSize="16sp"
                                 android:textStyle="bold" />
 
                         </LinearLayout>
@@ -247,24 +335,27 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:visibility="gone"
-                            android:layout_marginTop="10dp" />
+                            android:layout_marginTop="12dp" />
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- ── Step 4: Solution ───────────────────────────────────── -->
+                <!-- ── Step 4: Solution ────────────────────────────────── -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    app:cardElevation="1dp"
-                    app:cardCornerRadius="12dp">
+                    android:layout_marginBottom="10dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="?attr/colorSurfaceVariant"
+                    app:cardCornerRadius="16dp"
+                    app:cardBackgroundColor="?attr/colorSurface">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="14dp">
+                        android:padding="16dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -273,21 +364,30 @@
                             android:gravity="center_vertical">
 
                             <TextView
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:text="4"
+                                android:textColor="?attr/colorOnPrimary"
+                                android:textSize="12sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:background="@drawable/bg_step_circle"
+                                android:layout_marginEnd="10dp" />
+
+                            <TextView
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="@string/step4_label"
-                                android:textSize="10sp"
+                                android:textSize="13sp"
                                 android:textStyle="bold"
-                                android:letterSpacing="0.12"
-                                android:textAllCaps="true"
-                                android:alpha="0.55" />
+                                android:textColor="?attr/colorOnSurface" />
 
                             <TextView
                                 android:id="@+id/badge4"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:textSize="13sp"
+                                android:textSize="16sp"
                                 android:textStyle="bold" />
 
                         </LinearLayout>
@@ -298,7 +398,7 @@
                             android:layout_height="wrap_content"
                             android:text="@string/solution_caption"
                             android:textSize="11sp"
-                            android:alpha="0.55"
+                            android:textColor="?attr/colorOnSurfaceVariant"
                             android:gravity="center"
                             android:visibility="gone"
                             android:layout_marginTop="8dp" />
@@ -308,26 +408,29 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:visibility="gone"
-                            android:layout_marginTop="10dp" />
+                            android:layout_marginTop="12dp" />
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- ── Timing ─────────────────────────────────────────────── -->
+                <!-- ── Timing ──────────────────────────────────────────── -->
                 <com.google.android.material.card.MaterialCardView
                     android:id="@+id/timingCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="8dp"
                     android:visibility="gone"
-                    app:cardElevation="1dp"
-                    app:cardCornerRadius="12dp">
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="?attr/colorSurfaceVariant"
+                    app:cardCornerRadius="16dp"
+                    app:cardBackgroundColor="?attr/colorSurface">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="14dp">
+                        android:padding="16dp">
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -336,7 +439,7 @@
                             android:textSize="10sp"
                             android:textStyle="bold"
                             android:letterSpacing="0.12"
-                            android:alpha="0.55"
+                            android:textColor="?attr/colorOnSurfaceVariant"
                             android:layout_marginBottom="8dp" />
 
                         <TextView
@@ -345,8 +448,8 @@
                             android:layout_height="wrap_content"
                             android:textSize="12sp"
                             android:fontFamily="monospace"
-                            android:alpha="0.75"
-                            android:lineSpacingMultiplier="1.5" />
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:lineSpacingMultiplier="1.6" />
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -354,7 +457,7 @@
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
 
-        <!-- ── Number pad — pinned to screen bottom while editing ─────── -->
+        <!-- ── Number pad ─────────────────────────────────────────────── -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/numberPadCard"
             android:layout_width="match_parent"
@@ -376,111 +479,103 @@
                     android:layout_height="wrap_content"
                     android:text="@string/number_pad_hint"
                     android:textSize="11sp"
-                    android:alpha="0.55"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:gravity="center"
                     android:layout_marginBottom="8dp" />
 
-                <!-- Row 1: 1 2 3 -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:layout_marginBottom="4dp">
-
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/numBtn1"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="1" android:layout_marginEnd="4dp"
-                        android:text="1" android:textSize="16sp" />
+                        android:text="1" android:textSize="16sp" app:cornerRadius="10dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/numBtn2"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="1" android:layout_marginEnd="4dp"
-                        android:text="2" android:textSize="16sp" />
+                        android:text="2" android:textSize="16sp" app:cornerRadius="10dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/numBtn3"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="1"
-                        android:text="3" android:textSize="16sp" />
+                        android:text="3" android:textSize="16sp" app:cornerRadius="10dp" />
                 </LinearLayout>
 
-                <!-- Row 2: 4 5 6 -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:layout_marginBottom="4dp">
-
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/numBtn4"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="1" android:layout_marginEnd="4dp"
-                        android:text="4" android:textSize="16sp" />
+                        android:text="4" android:textSize="16sp" app:cornerRadius="10dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/numBtn5"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="1" android:layout_marginEnd="4dp"
-                        android:text="5" android:textSize="16sp" />
+                        android:text="5" android:textSize="16sp" app:cornerRadius="10dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/numBtn6"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="1"
-                        android:text="6" android:textSize="16sp" />
+                        android:text="6" android:textSize="16sp" app:cornerRadius="10dp" />
                 </LinearLayout>
 
-                <!-- Row 3: 7 8 9 -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:layout_marginBottom="4dp">
-
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/numBtn7"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="1" android:layout_marginEnd="4dp"
-                        android:text="7" android:textSize="16sp" />
+                        android:text="7" android:textSize="16sp" app:cornerRadius="10dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/numBtn8"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="1" android:layout_marginEnd="4dp"
-                        android:text="8" android:textSize="16sp" />
+                        android:text="8" android:textSize="16sp" app:cornerRadius="10dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/numBtn9"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="1"
-                        android:text="9" android:textSize="16sp" />
+                        android:text="9" android:textSize="16sp" app:cornerRadius="10dp" />
                 </LinearLayout>
 
-                <!-- Row 4: Clear + Re-solve -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal">
-
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/numBtn0"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="1" android:layout_marginEnd="4dp"
-                        android:text="@string/clear_cell" android:textSize="13sp" />
-
+                        android:text="@string/clear_cell" android:textSize="13sp"
+                        app:cornerRadius="10dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/resolveButton"
                         android:layout_width="0dp" android:layout_height="48dp"
                         android:layout_weight="2"
                         android:text="@string/resolve_button"
-                        android:textSize="13sp" />
-
+                        android:textSize="13sp"
+                        app:cornerRadius="10dp" />
                 </LinearLayout>
 
             </LinearLayout>
@@ -488,7 +583,6 @@
 
     </LinearLayout>
 
-    <!-- Progress spinner centred over everything -->
     <ProgressBar
         android:id="@+id/progress"
         android:layout_width="wrap_content"

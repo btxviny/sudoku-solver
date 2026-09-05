@@ -27,6 +27,32 @@
     ]
   },
   {
+    "file": "cellocr.tflite",
+    "size_mb": 8.08,
+    "inputs": [
+      {
+        "name": "serving_default_args_0",
+        "shape": [
+          81,
+          1,
+          70,
+          70
+        ],
+        "dtype": "float32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "serving_default_output_0_output",
+        "shape": [
+          81,
+          10
+        ],
+        "dtype": "float32"
+      }
+    ]
+  },
+  {
     "file": "grid_pose.tflite",
     "size_mb": 12.66,
     "inputs": [
@@ -92,7 +118,7 @@
   },
   {
     "file": "gridocr.tflite",
-    "size_mb": 9.7,
+    "size_mb": 9.71,
     "inputs": [
       {
         "name": "serving_default_args_0",

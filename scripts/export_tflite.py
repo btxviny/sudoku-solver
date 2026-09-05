@@ -3,8 +3,9 @@
 Three models, two toolchains:
 
   grid_seg / cell_vision  Ultralytics exports YOLO directly.
-  GridOCRNet              A plain PyTorch CNN, so torch -> ONNX -> TFLite via
-                          onnx2tf (the same converter Ultralytics uses).
+  GridOCRNet / CellOCRNet Plain PyTorch CNNs, converted straight from the
+                          nn.Module by litert_torch (the converter Ultralytics
+                          uses underneath).
 
 Layout is the thing to watch.  PyTorch is NCHW; TFLite is NHWC.  The converter
 transposes the weights, but the *caller* must feed NHWC, and getting that wrong
@@ -14,7 +15,7 @@ against PyTorch rather than trusting the conversion.
 
 Usage:
     uv run python scripts/export_tflite.py            # all
-    uv run python scripts/export_tflite.py --only gridocr
+    uv run python scripts/export_tflite.py --only cellocr
 """
 
 from __future__ import annotations
@@ -53,18 +54,30 @@ def export_yolo(name: str, weights: Path, imgsz: int, half: bool) -> Path | None
     return dst
 
 
-def export_gridocr(half: bool) -> Path | None:
+#: The per-cell digit readers, each a plain PyTorch CNN.  Keyed by the asset
+#: name the Android side loads.
+TORCH_READERS = {
+    "gridocr": ("sudoku_solver.grid_ocr", "GridOCRNet", "GridOCRConfig"),
+    "cellocr": ("sudoku_solver.cell_ocr", "CellOCRNet", "CellOCRConfig"),
+}
+
+
+def export_reader(name: str) -> Path | None:
+    """Export one per-cell digit reader: torch -> litert -> assets/<name>.tflite."""
+    import importlib
+
     import torch
 
-    from sudoku_solver.config import GridOCRConfig
-    from sudoku_solver.grid_ocr import GridOCRNet
+    module_name, net_name, config_name = TORCH_READERS[name]
+    config_cls = getattr(importlib.import_module("sudoku_solver.config"), config_name)
+    net_cls = getattr(importlib.import_module(module_name), net_name)
 
-    cfg = GridOCRConfig()
+    cfg = config_cls()
     if not cfg.model_path.exists():
-        print(f"  gridocr: weights missing at {cfg.model_path} -- skipped")
+        print(f"  {name}: weights missing at {cfg.model_path} -- skipped")
         return None
 
-    net = GridOCRNet(cell_size=cfg.patch_size)
+    net = net_cls(cell_size=cfg.patch_size)
     net.load_state_dict(torch.load(cfg.model_path, map_location="cpu", weights_only=True))
     net.eval()
 
@@ -77,19 +90,18 @@ def export_gridocr(half: bool) -> Path | None:
     # Fixed batch of 81: the pipeline always reads a whole grid, and one
     # invocation over all cells is far cheaper on device than 81 of them.
     BATCH = 81
-    print(f"  gridocr: torch -> litert ({BATCH},1,{PS},{PS})")
-    sample = (torch.zeros(BATCH, 1, PS, PS),)
-    converted = litert_torch.convert(net, sample)
+    print(f"  {name}: torch -> litert ({BATCH},1,{PS},{PS})")
+    converted = litert_torch.convert(net, (torch.zeros(BATCH, 1, PS, PS),))
 
-    work = ROOT / "experiments/export_gridocr"
+    work = ROOT / f"experiments/export_{name}"
     work.mkdir(parents=True, exist_ok=True)
-    tmp = work / "gridocr.tflite"
+    tmp = work / f"{name}.tflite"
     converted.export(str(tmp))
 
     OUT.mkdir(parents=True, exist_ok=True)
-    dst = OUT / "gridocr.tflite"
+    dst = OUT / f"{name}.tflite"
     shutil.copy2(tmp, dst)
-    print(f"  gridocr: -> {dst.relative_to(ROOT)}  ({dst.stat().st_size / 1e6:.1f} MB)")
+    print(f"  {name}: -> {dst.relative_to(ROOT)}  ({dst.stat().st_size / 1e6:.1f} MB)")
     return dst
 
 
@@ -119,7 +131,7 @@ def describe(path: Path) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", choices=[*MODELS, "gridocr"], default=None)
+    ap.add_argument("--only", choices=[*MODELS, *TORCH_READERS], default=None)
     ap.add_argument("--imgsz", type=int, default=640)
     ap.add_argument("--half", action="store_true", help="Export float16 where supported")
     args = ap.parse_args()
@@ -134,8 +146,10 @@ def main() -> None:
         if p:
             produced.append(p)
 
-    if args.only in (None, "gridocr"):
-        p = export_gridocr(args.half)
+    for name in TORCH_READERS:
+        if args.only and args.only != name:
+            continue
+        p = export_reader(name)
         if p:
             produced.append(p)
 

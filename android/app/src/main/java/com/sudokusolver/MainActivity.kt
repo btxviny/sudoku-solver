@@ -13,6 +13,7 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.sudokusolver.core.DigitModel
 import com.sudokusolver.core.SudokuException
 import com.sudokusolver.core.SudokuPipeline
 import com.sudokusolver.core.SudokuSolver
@@ -29,6 +30,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var pipeline: SudokuPipeline? = null
+
+    /** Which digit reader is loaded. Changing it rebuilds [pipeline]. */
+    private var digitModel = DigitModel.CELL_OCR
 
     /** Last puzzle the OCR step produced — used as the seed for edit mode. */
     private var currentPuzzle: IntArray? = null
@@ -67,11 +71,18 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        lifecycleScope.launch {
-            status("Loading models…")
-            pipeline = withContext(Dispatchers.Default) { SudokuPipeline(applicationContext) }
-            status(getString(R.string.subtitle))
+        binding.readerToggle.check(
+            if (digitModel == DigitModel.CELL_OCR) R.id.readerCellOcr else R.id.readerGridOcr
+        )
+        binding.readerHint.setText(hintFor(digitModel))
+        binding.readerToggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            val picked =
+                if (checkedId == R.id.readerCellOcr) DigitModel.CELL_OCR else DigitModel.GRID_OCR
+            if (picked != digitModel) loadPipeline(picked)
         }
+
+        loadPipeline(digitModel)
 
         binding.cameraButton.setOnClickListener {
             requestCamera.launch(android.Manifest.permission.CAMERA)
@@ -111,6 +122,54 @@ class MainActivity : AppCompatActivity() {
 
         // ── Re-solve with edited digits ───────────────────────────────────────
         binding.resolveButton.setOnClickListener { resolveEdited() }
+    }
+
+    /**
+     * Enable or disable the picker.
+     *
+     * The buttons are toggled individually: disabling the enclosing
+     * [com.google.android.material.button.MaterialButtonToggleGroup] leaves its
+     * children clickable, so a second switch could still arrive mid-load.
+     */
+    private fun setPickerEnabled(enabled: Boolean) {
+        binding.readerGridOcr.isEnabled = enabled
+        binding.readerCellOcr.isEnabled = enabled
+    }
+
+    private fun hintFor(model: DigitModel) = when (model) {
+        DigitModel.GRID_OCR -> R.string.reader_hint_grid_ocr
+        DigitModel.CELL_OCR -> R.string.reader_hint_cell_ocr
+    }
+
+    /**
+     * Build the pipeline for [model], replacing whatever is loaded.
+     *
+     * Each reader is about 10 MB of mapped weights, so the old pipeline is
+     * closed before the new one is built rather than holding both.  The picker
+     * is disabled meanwhile: a second switch arriving mid-build would leave two
+     * pipelines racing for the same interpreter resources.
+     */
+    private fun loadPipeline(model: DigitModel) {
+        digitModel = model
+        binding.readerHint.setText(hintFor(model))
+        setPickerEnabled(false)
+        lifecycleScope.launch {
+            status(getString(R.string.reader_switching))
+            val built = withContext(Dispatchers.Default) {
+                pipeline?.close()
+                pipeline = null
+                runCatching { SudokuPipeline(applicationContext, model) }
+            }
+            setPickerEnabled(true)
+            built.onSuccess {
+                pipeline = it
+                status(getString(R.string.subtitle))
+            }.onFailure {
+                // A missing asset is the likely cause: cellocr.tflite only
+                // exists once training/cell_ocr has been exported.
+                status("Could not load ${model.label}: ${it.message ?: "unknown error"}")
+            }
+        }
     }
 
     private fun launchCamera() = takePhoto.launch(Intent(MediaStore.ACTION_IMAGE_CAPTURE))

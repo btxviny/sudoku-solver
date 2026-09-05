@@ -30,6 +30,24 @@ class GridOCRConfig:
 
 
 @dataclass
+class CellOCRConfig:
+    """Configuration for the CellOCR CNN digit reader (second generation).
+
+    `patch_size` matches GridOCR's deliberately: both readers are fed by the
+    same canonical cell sampling, so a comparison between them measures the
+    networks rather than the crops.
+
+    Train with:
+        uv run python training/cell_ocr/train.py
+    """
+    model_path: Path = field(default_factory=lambda: WEIGHTS_DIR / "cell_ocr_cnn.pth")
+    patch_size: int = 70   # cell size in pixels (grid output_size / 9)
+
+    def __post_init__(self):
+        self.model_path = resolve(self.model_path)
+
+
+@dataclass
 class YoloCellExtractorConfig:
     """Configuration for the YOLO-based cell extractor."""
     model_path: Path = field(
@@ -87,6 +105,7 @@ class YoloGridDetectorConfig:
 class PipelineConfig:
     """Top-level configuration for the entire pipeline."""
     grid_ocr: GridOCRConfig = field(default_factory=GridOCRConfig)
+    cell_ocr: CellOCRConfig = field(default_factory=CellOCRConfig)
     yolo_cell_extractor: YoloCellExtractorConfig = field(default_factory=YoloCellExtractorConfig)
     yolo_grid_detector: YoloGridDetectorConfig = field(default_factory=YoloGridDetectorConfig)
     device: str = "auto"   # "auto" | "cuda" | "cpu"

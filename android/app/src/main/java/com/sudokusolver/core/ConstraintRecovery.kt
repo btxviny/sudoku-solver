@@ -19,8 +19,13 @@ class RecoveryResult(
  *
  * Two strategies, in order:
  *
- *  1. Substitute alternatives into the least-confident cells -- one, then two,
- *     then three at a time.
+ *  1. Substitute alternatives into the least-confident cells -- one through
+ *     five at a time, drawn from two candidate pools: cells below the absolute
+ *     confidence threshold, and the worst 85% of digit-predicted cells by
+ *     confidence rank (so only the very most confident digit cells are excluded).
+ *     Class 0 (empty) is a valid alternative, to handle the case where a
+ *     filled-cell prediction lands on an actually-empty cell in a half-filled
+ *     puzzle.
  *  2. Failing that, blank every cell below a confidence threshold and let the
  *     solver reconstruct them, provided few enough are blanked that the puzzle
  *     stays determined.
@@ -37,10 +42,13 @@ object ConstraintRecovery {
     private const val UNCERTAIN_BELOW = 0.60f
 
     /** Cap on cells considered; the search is combinatorial in this. */
-    private const val MAX_UNCERTAIN = 12
+    private const val MAX_UNCERTAIN = 16
 
     /** Substitute into at most this many cells at once. */
-    private const val MAX_FLIPS = 3
+    private const val MAX_FLIPS = 5
+
+    /** Fraction of digit-predicted cells to always include (worst this many). */
+    private const val DIGIT_PCT = 0.85f
 
     /** Blank-and-refill thresholds, tried in order. */
     private val CONFIDENCE_THRESHOLDS = floatArrayOf(0.80f, 0.70f, 0.60f)
@@ -66,18 +74,54 @@ object ConstraintRecovery {
             val ranked = (0..9).sortedByDescending { row[it] }
             top1[i] = row[ranked[0]]
             // Ranks 2-4 only: past that the network is guessing, and each extra
-            // alternative multiplies the search.
-            var alts = ranked.subList(1, 4).filter { row[it] >= MIN_ALT_PROB }
-            // A cell read as a digit cannot be re-read as empty -- the solver
-            // would simply fill it back in, so the substitution is not a test.
-            if (puzzle[i] > 0) alts = alts.filter { it != 0 }
-            candidates[i] = alts.toIntArray()
+            // alternative multiplies the search.  Class 0 (empty) is a valid
+            // alternative for digit cells -- a digit predicted in an empty cell
+            // of a half-filled puzzle is a real OCR error, and the only fix is
+            // to treat that cell as empty.
+            candidates[i] = ranked.subList(1, 4).filter { row[it] >= MIN_ALT_PROB }.toIntArray()
         }
 
-        val uncertain = (0 until SudokuSolver.CELLS)
+        // Cells with direct constraint violations (same digit twice in a row/col/box).
+        // These are definitively wrong regardless of confidence and always enter the pool.
+        val violationCells = mutableSetOf<Int>()
+        val groups = buildList {
+            for (r in 0..8) add((0..8).map { r * 9 + it })           // rows
+            for (c in 0..8) add((0..8).map { it * 9 + c })           // cols
+            for (br in 0..2) for (bc in 0..2)
+                add((0..2).flatMap { dr -> (0..2).map { dc -> (br*3+dr)*9 + bc*3+dc } }) // boxes
+        }
+        for (group in groups) {
+            val seen = mutableMapOf<Int, Int>()
+            for (i in group) {
+                val v = puzzle[i]; if (v == 0) continue
+                val prev = seen[v]
+                if (prev != null) { violationCells += i; violationCells += prev } else seen[v] = i
+            }
+        }
+        // Ensure violation cells have 0 (empty) as a candidate to try.
+        for (i in violationCells) {
+            if (candidates[i] != null && 0 !in candidates[i]!!)
+                candidates[i] = intArrayOf(0) + candidates[i]!!
+        }
+
+        // Threshold-based: any cell below UNCERTAIN_BELOW with alternatives.
+        val uncertainThresh = (0 until SudokuSolver.CELLS)
             .filter { candidates[it]!!.isNotEmpty() && top1[it] < UNCERTAIN_BELOW }
             .sortedBy { top1[it] }
-            .take(MAX_UNCERTAIN)
+
+        // Percentile-based: worst DIGIT_PCT of digit-predicted cells regardless
+        // of absolute confidence.  Taking the fraction over digit cells only
+        // avoids empty-cell predictions in the low-confidence tail crowding out
+        // genuine misread digits sitting above the 0.60 threshold.
+        val digitCellsSorted = (0 until SudokuSolver.CELLS)
+            .filter { puzzle[it] > 0 && candidates[it]!!.isNotEmpty() }
+            .sortedBy { top1[it] }
+        val nPct = maxOf(8, (digitCellsSorted.size * DIGIT_PCT).toInt())
+        val uncertainPct = digitCellsSorted.take(nPct)
+
+        val uncertain = (uncertainThresh.toSet() + uncertainPct.toSet() + violationCells)
+            .sortedBy { top1[it] }
+            .take(MAX_UNCERTAIN)  // cap: search is combinatorial in this
 
         // ── Strategy 1: substitute alternatives ──────────────────────────────
         for (nFlip in 1..MAX_FLIPS) {

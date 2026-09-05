@@ -75,7 +75,7 @@ core/                     pure logic, no Android dependencies
   SudokuPipeline.kt       the whole recipe
 MainActivity.kt           camera / gallery, runs the pipeline off the main thread
 SudokuGridView.kt         draws clues and solved digits differently
-assets/                   the four exported models + models.json
+assets/                   the five exported models + models.json
 ```
 
 `core/` deliberately has no Android imports beyond `Context` for asset loading,
@@ -107,8 +107,24 @@ uv run python scripts/export_tflite.py
 
 Writes to `app/src/main/assets/` and refreshes `models.json`, which records each
 model's input shape. Check it after any re-export: the models take **NCHW**
-(`[1, 3, 640, 640]`, `[81, 1, 50, 50]`), not NHWC. A wrong layout does not throw,
+(`[1, 3, 640, 640]`, `[81, 1, 70, 70]`), not NHWC. A wrong layout does not throw,
 it just returns confident nonsense.
+
+## Digit readers
+
+Two are shipped, chosen by the picker on the main screen and by `DigitModel` in
+code. Both take `[81, 1, 70, 70]` and return `[81, 10]`, and both are fed by the
+same `CellPreprocessor`, so switching compares the networks and nothing else.
+
+| | `gridocr.tflite` | `cellocr.tflite` |
+|---|---|---|
+| Network | GridOCRNet, residual CNN | CellOCRNet, squeeze-excitation CNN |
+| Size | 9.7 MB | 8.1 MB |
+| Held-out photos read perfectly | 13/40 | **38/40** |
+
+**CellOCR is the default.** Only one reader is held at a time — each is about
+10 MB of mapped weights — so switching closes the old pipeline and builds a new
+one.
 
 ## Notes
 

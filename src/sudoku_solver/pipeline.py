@@ -36,19 +36,35 @@ class PipelinePath:
 # Ordered best-first: the UI defaults to the first available entry.
 PIPELINE_PATHS: tuple[PipelinePath, ...] = (
     PipelinePath(
+        key="yolo_cellocr",
+        label="YOLO grid warp · YOLO cells · CellOCR CNN",
+        ocr="cell_ocr",
+        description=(
+            "A ~6 MB YOLOv8n model locates the grid and corrects perspective — seg "
+            "or pose, selectable in the sidebar. YOLOv8n then locates the 81 cells "
+            "on the rectified grid, and each cell is read by CellOCR: a "
+            "squeeze-excitation CNN trained from scratch on photographed cells, "
+            "system-font typed digits and EMNIST handwriting, with MNIST held out "
+            "so the handwriting benchmark stays honest. Per-cell probabilities "
+            "drive constraint recovery when the first solve attempt fails."
+        ),
+        requires=("yolo_grid_detector", "yolo_extractor", "cell_ocr"),
+        hint="Needs YOLO grid weights + YOLO cell weights + cell_ocr_cnn.pth (training/cell_ocr/train.py)",
+        recommended=True,
+    ),
+    PipelinePath(
         key="yolo_gridocr",
         label="YOLO grid warp · YOLO cells · GridOCR CNN",
         ocr="grid_ocr",
         description=(
-            "A ~6 MB YOLOv8n model locates the grid and corrects perspective — seg "
-            "or pose, selectable in the sidebar. YOLOv8n then locates the 81 cells "
-            "on the rectified grid, and each cell is read by the GridOCR CNN, whose "
-            "per-cell probabilities drive constraint recovery when the first solve "
-            "attempt fails."
+            "The same grid detection and cell location, read by the first-generation "
+            "GridOCR CNN. Kept for comparison: on the held-out Wicht photos it reads "
+            "13/40 grids perfectly against CellOCR's 38/40, and its apparent "
+            "advantage on handwriting is an artefact of having trained on the MNIST "
+            "glyphs that benchmark is built from."
         ),
         requires=("yolo_grid_detector", "yolo_extractor", "grid_ocr"),
         hint="Needs YOLO grid weights (training/grid_seg or grid_pose) + YOLO cell weights + grid_ocr_cnn.pth",
-        recommended=True,
     ),
 )
 
@@ -97,6 +113,7 @@ class SudokuPipeline:
 
     OCR modes:
         "grid_ocr"      GridOCR CNN over each detected cell
+        "cell_ocr"      CellOCR CNN (second generation) over the same cells
     """
 
     def __init__(self, config: PipelineConfig | None = None):
@@ -119,6 +136,14 @@ class SudokuPipeline:
 
         self.grid_ocr = _try_load(
             "GridOCR", self.cfg.grid_ocr.model_path, _build_grid_ocr
+        )
+
+        def _build_cell_ocr():
+            from .cell_ocr import CellOCR
+            return CellOCR(self.cfg.cell_ocr, device=device)
+
+        self.cell_ocr = _try_load(
+            "CellOCR", self.cfg.cell_ocr.model_path, _build_cell_ocr
         )
 
         def _build_yolo():
@@ -258,9 +283,18 @@ class SudokuPipeline:
         """Paths that are missing at least one component."""
         return [p for p in PIPELINE_PATHS if not self.path_available(p)]
 
+    #: The OCR modes, each naming the attribute that holds its reader.  Both
+    #: readers implement `DigitReader`, so the pipeline needs no other knowledge
+    #: of which one it is running.
+    OCR_READERS = ("cell_ocr", "grid_ocr")
+
+    def reader(self, ocr_mode: str):
+        """The loaded reader for `ocr_mode`, or None when its weights are absent."""
+        return getattr(self, ocr_mode, None) if ocr_mode in self.OCR_READERS else None
+
     def available_ocr_modes(self) -> list[str]:
         """Digit readers whose weights are loaded."""
-        return ["grid_ocr"] if self.grid_ocr is not None else []
+        return [m for m in self.OCR_READERS if self.reader(m) is not None]
 
     def run_path(self, image: np.ndarray | str, path: PipelinePath) -> PipelineResult:
         """Run a `PipelinePath` — the mode pair the UI and CLI select from."""
@@ -269,13 +303,14 @@ class SudokuPipeline:
     def run(
         self,
         image: np.ndarray | str,
-        ocr_mode: str = "grid_ocr",
+        ocr_mode: str = "cell_ocr",
     ) -> PipelineResult:
         """Run the full pipeline on an image path or numpy array.
 
         Args:
             image:    File path (str) or RGB numpy array.
-            ocr_mode: "grid_ocr"     — GridOCR CNN over the cells YOLO located
+            ocr_mode: "grid_ocr"  — GridOCR CNN over the cells YOLO located
+                      "cell_ocr"  — CellOCR CNN over the same cells
 
         Never raises for a failed step: the failing stage is recorded in
         `PipelineResult.errors` along with whatever earlier stages produced.
@@ -331,20 +366,24 @@ class SudokuPipeline:
 
         # ══ Step 2: OCR ══════════════════════════════════════════════════════
         try:
-            if ocr_mode != "grid_ocr":
+            if ocr_mode not in self.OCR_READERS:
                 raise RuntimeError(
-                    f"Unknown OCR mode {ocr_mode!r}. Only 'grid_ocr' is supported."
+                    f"Unknown OCR mode {ocr_mode!r}. Known modes: "
+                    + ", ".join(self.OCR_READERS)
                 )
-            if self.grid_ocr is None:
-                raise RuntimeError("GridOCR model not available — check model weights")
+            reader = self.reader(ocr_mode)
+            if reader is None:
+                raise RuntimeError(
+                    f"{ocr_mode} model not available — check model weights"
+                )
             t = time.perf_counter()
             cells, scaled = self._canonical_cells(
-                rectified, boxes_px, self.grid_ocr.cfg.patch_size
+                rectified, boxes_px, reader.patch_size
             )
-            puzzle, ocr_probs = self.grid_ocr.read_cells(cells, contrast_ref=scaled)
-            timings["grid_ocr"] = time.perf_counter() - t
+            puzzle, ocr_probs = reader.read_cells(cells, contrast_ref=scaled)
+            timings[ocr_mode] = time.perf_counter() - t
 
-            # GridOCR reads the cells YOLO located, so the digits are drawn
+            # The reader read the cells YOLO located, so the digits are drawn
             # back into those same boxes.
             recognition_image = self._make_recognition_image(
                 rectified, puzzle, boxes_px
@@ -431,8 +470,9 @@ def recover_with_constraints(
 ) -> tuple[np.ndarray, np.ndarray, float]:
     """Fix OCR errors by substituting alternative digit predictions.
 
-    Tries 1–3 substitutions on the least-confident cells, then falls back to
-    zeroing cells below a confidence threshold so the solver can fill them.
+    Tries 1–5 substitutions on the least-confident cells using two candidate
+    selection strategies, then falls back to zeroing cells below a confidence
+    threshold so the solver can fill them.
     """
     candidates: list[list[int]] = []
     top1_confs: list[float] = []
@@ -440,21 +480,71 @@ def recover_with_constraints(
     for i in range(81):
         ranked = sorted(range(10), key=lambda d, i=i: -probs[i, d])
         top1_confs.append(float(probs[i, ranked[0]]))
+        # Include top-3 alternatives, including class 0 (empty) for digit cells.
+        # A digit predicted in an empty cell of a half-filled puzzle is a real
+        # OCR error that can only be fixed by allowing the empty alternative.
         alts = [d for d in ranked[1:4] if probs[i, d] >= 0.03]
-        if flat[i] > 0:
-            alts = [d for d in alts if d != 0]
         candidates.append(alts)
 
-    uncertain_idx = [
-        i for i in range(81)
-        if candidates[i] and top1_confs[i] < 0.60
-    ]
-    uncertain_idx.sort(key=lambda i: top1_confs[i])
+    # Cells with direct constraint violations: same digit appears twice in the same
+    # row, column, or box.  These are definitively wrong regardless of confidence
+    # and must be in the recovery pool even if the model is 0.99 confident.
+    groups: list[list[int]] = []
+    for r in range(9):
+        groups.append([r * 9 + c for c in range(9)])           # rows
+    for c in range(9):
+        groups.append([r * 9 + c for r in range(9)])           # cols
+    for br in range(3):
+        for bc in range(3):
+            groups.append([
+                (br * 3 + dr) * 9 + (bc * 3 + dc)
+                for dr in range(3) for dc in range(3)
+            ])                                                  # boxes
+    violation_cells: set[int] = set()
+    for group in groups:
+        seen: dict[int, int] = {}
+        for i in group:
+            v = flat[i]
+            if v == 0:
+                continue
+            if v in seen:
+                violation_cells.add(i)
+                violation_cells.add(seen[v])
+            else:
+                seen[v] = i
+
+    # Ensure violation cells have at least [0] as an alternative to try.
+    for i in violation_cells:
+        if 0 not in candidates[i]:
+            candidates[i] = [0] + candidates[i]
+
+    # Threshold-based: any cell below 0.60 with at least one alternative.
+    uncertain_thresh = sorted(
+        [i for i in range(81) if candidates[i] and top1_confs[i] < 0.60],
+        key=lambda i: top1_confs[i],
+    )
+
+    # Percentile-based: worst 85% of digit-predicted cells, so the only cells
+    # excluded are the very most confident ones.  For sparse (half-filled)
+    # grids this beats a fixed fraction of all 81 cells because the low-
+    # confidence tail is dominated by empty-cell predictions that crowd out
+    # genuine misread digits sitting at 0.68 confidence.
+    digit_cells_sorted = sorted(
+        [i for i in range(81) if flat[i] > 0 and candidates[i]],
+        key=lambda i: top1_confs[i],
+    )
+    n_digit_pct = max(8, int(len(digit_cells_sorted) * 0.85))
+    uncertain_pct = digit_cells_sorted[:n_digit_pct]
+
+    uncertain_idx = sorted(
+        set(uncertain_thresh) | set(uncertain_pct) | violation_cells,
+        key=lambda i: top1_confs[i],
+    )
 
     base = puzzle.flatten().astype(np.uint8)
     t0 = time.perf_counter()
-    for n_flip in (1, 2, 3):
-        for combo in itertools.combinations(uncertain_idx[:12], n_flip):
+    for n_flip in (1, 2, 3, 4, 5):
+        for combo in itertools.combinations(uncertain_idx[:20], n_flip):
             alt_lists = [candidates[i] for i in combo]
             for alt_digits in itertools.product(*alt_lists):
                 candidate = base.copy()

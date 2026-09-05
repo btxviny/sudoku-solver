@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SudokuSolver" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#ADC8FF</item>
+        <item name="colorOnPrimary">#002E6B</item>
+        <item name="colorPrimaryContainer">#1B3A6B</item>
+        <item name="colorOnPrimaryContainer">#D6E4FF</item>
+
+        <item name="colorSecondary">#B5C7E9</item>
+        <item name="colorOnSecondary">#1E3153</item>
+        <item name="colorSecondaryContainer">#354769</item>
+        <item name="colorOnSecondaryContainer">#D4E3FF</item>
+
+        <item name="colorSurface">#111318</item>
+        <item name="colorOnSurface">#E2E2E9</item>
+        <item name="colorSurfaceVariant">#44474E</item>
+        <item name="colorOnSurfaceVariant">#C4C6D0</item>
+
+        <item name="android:colorBackground">#111318</item>
+
+        <item name="colorError">#F28B82</item>
+        <item name="colorOnError">#601410</item>
+    </style>
+</resources>
