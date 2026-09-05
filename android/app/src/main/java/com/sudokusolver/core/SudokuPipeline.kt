@@ -11,11 +11,19 @@ import java.io.Closeable
  * carries whatever was produced plus the reason it stopped, so the UI can show
  * the rectified grid even when the digits could not be read.
  */
-class SudokuPipeline(context: Context) : Closeable {
+class SudokuPipeline(
+    context: Context,
+    /**
+     * Which digit reader to load.  Only one is held at a time -- each is about
+     * 10 MB of mapped weights -- so switching readers means building a new
+     * pipeline and closing the old one.
+     */
+    val digitModel: DigitModel = DigitModel.CELL_OCR,
+) : Closeable {
 
     private val cornerDetector = GridCornerDetector(context)
     private val cellDetector = CellDetector(context)
-    private val digitReader = DigitReader(context)
+    private val digitReader = DigitReader(context, digitModel)
 
     /** Rectified grid edge in pixels. 9 x [CellPreprocessor.PATCH]. */
     private val warpSize = CellPreprocessor.GRID

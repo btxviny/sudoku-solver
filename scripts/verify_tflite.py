@@ -8,7 +8,7 @@ matters: whether they read the same digits.
 
 Usage:
     uv run python scripts/verify_tflite.py
-    uv run python scripts/verify_tflite.py --only gridocr
+    uv run python scripts/verify_tflite.py --only cellocr
 """
 
 from __future__ import annotations
@@ -22,6 +22,9 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
+# `export_tflite` owns the reader registry (asset name -> module/class/config);
+# importing it here keeps export and verification from listing models apart.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 ASSETS = ROOT / "android/app/src/main/assets"
 
@@ -36,14 +39,20 @@ def load_interpreter(path: Path):
     return it
 
 
-def sample_patches(limit_images: int = 30) -> np.ndarray:
-    """Real prepared cell patches, exactly as GridOCR would see them."""
-    from sudoku_solver.grid_ocr import GridOCR
+def sample_patches(patch_size: int, limit_images: int = 30) -> np.ndarray:
+    """Real prepared cell patches, exactly as the reader would see them.
+
+    `patch_size` comes from the reader's own config rather than a constant: a
+    patch cut at the wrong size is not a small error, it is a different problem
+    (measured: 20 % digit accuracy), and hardcoding it here once let this check
+    drift away from the model it was supposed to be checking.
+    """
+    from sudoku_solver.cell_prep import is_low_contrast, prep_patch
 
     imgs = sorted(ROOT.glob("test_images/*.png")) + sorted(ROOT.glob("test_images/*.jpg"))
     imgs += sorted(ROOT.glob("data/wicht_sudoku/v2_test/*.jpg"))[:limit_images]
 
-    PS = 50
+    PS = patch_size
     out: list[np.ndarray] = []
     for p in imgs:
         raw = cv2.imread(str(p))
@@ -52,32 +61,38 @@ def sample_patches(limit_images: int = 30) -> np.ndarray:
         rgb = cv2.cvtColor(raw, cv2.COLOR_BGR2RGB)
         scaled = cv2.resize(rgb, (PS * 9, PS * 9), interpolation=cv2.INTER_AREA)
         gray = cv2.cvtColor(scaled, cv2.COLOR_RGB2GRAY)
-        low = bool((np.percentile(gray, 98) - np.percentile(gray, 2)) < 180)
+        low = is_low_contrast(gray)
         for r in range(9):
             for c in range(9):
                 cell = gray[r * PS:(r + 1) * PS, c * PS:(c + 1) * PS].copy()
-                out.append(GridOCR._prep_patch(cell, low))
+                out.append(prep_patch(cell, low))
     return np.stack(out)
 
 
-def verify_gridocr() -> bool:
+def verify_reader(asset: str) -> bool:
+    """Compare one exported per-cell reader against its PyTorch original."""
+    import importlib
+
     import torch
     import torch.nn.functional as F
 
-    from sudoku_solver.config import GridOCRConfig
-    from sudoku_solver.grid_ocr import GridOCRNet
+    from export_tflite import TORCH_READERS
 
-    model_path = ASSETS / "gridocr.tflite"
+    model_path = ASSETS / f"{asset}.tflite"
     if not model_path.exists():
-        print("  gridocr.tflite missing -- export it first")
+        print(f"  {asset}.tflite missing -- export it first")
         return False
 
-    cfg = GridOCRConfig()
-    net = GridOCRNet(cell_size=cfg.patch_size)
+    module_name, net_name, config_name = TORCH_READERS[asset]
+    cfg = getattr(importlib.import_module("sudoku_solver.config"), config_name)()
+    if not cfg.model_path.exists():
+        print(f"  {asset}: torch weights missing at {cfg.model_path}")
+        return False
+    net = getattr(importlib.import_module(module_name), net_name)(cell_size=cfg.patch_size)
     net.load_state_dict(torch.load(cfg.model_path, map_location="cpu", weights_only=True))
     net.eval()
 
-    patches = sample_patches()
+    patches = sample_patches(cfg.patch_size)
     print(f"  comparing on {len(patches)} real prepared patches")
 
     x = torch.from_numpy(patches).float().unsqueeze(1) / 255.0
@@ -126,7 +141,20 @@ def verify_gridocr() -> bool:
         for i in bad:
             print(f"    patch {i}: torch={ref_d[i]} (p={ref_probs[i].max():.3f})  "
                   f"tflite={got_d[i]} (p={got[i].max():.3f})")
-    return agree == len(patches)
+
+    # Gate on the probabilities, not on the argmax.  Demanding identical digits
+    # fails on a cell the model itself cannot decide -- two classes within 1e-6
+    # of each other, where float noise picks the winner -- which says nothing
+    # about the conversion.  A max probability delta this small means the two
+    # runtimes are computing the same function; anything larger is a real
+    # layout or precision fault, and those show up at 1e-2 or worse.
+    TOL = 1e-4
+    if max_abs >= TOL:
+        print(f"  FAIL: max |dprob| {max_abs:.2e} exceeds {TOL:.0e}")
+    elif agree != len(patches):
+        print(f"  ({len(patches) - agree} digit(s) differ on ties; probabilities "
+              f"agree to {max_abs:.1e})")
+    return max_abs < TOL
 
 
 def verify_yolo(name: str, weights: Path) -> bool:
@@ -186,13 +214,16 @@ def verify_yolo(name: str, weights: Path) -> bool:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", choices=["gridocr", "cell_vision", "grid_seg", "grid_pose"])
+    from export_tflite import TORCH_READERS
+
+    ap.add_argument("--only", choices=[*TORCH_READERS, "cell_vision", "grid_seg", "grid_pose"])
     args = ap.parse_args()
 
     checks: list[tuple[str, bool]] = []
-    if args.only in (None, "gridocr"):
-        print("GridOCRNet")
-        checks.append(("gridocr", verify_gridocr()))
+    for asset, (_mod, net_name, _cfg) in TORCH_READERS.items():
+        if args.only in (None, asset):
+            print(net_name)
+            checks.append((asset, verify_reader(asset)))
     for name, w in [
         ("cell_vision", ROOT / "training/cell_extraction/runs/cell_vision_v6/weights/best.pt"),
         ("grid_seg", ROOT / "training/grid_seg/runs/grid_seg_v1/weights/best.pt"),

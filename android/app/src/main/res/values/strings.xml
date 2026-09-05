@@ -16,4 +16,10 @@
     <string name="number_pad_hint">Tap a cell then a number  ·  orange = your edit</string>
     <string name="clear_cell">Clear</string>
     <string name="resolve_button">Re-solve</string>
+    <string name="reader_label">Digit reader</string>
+    <string name="reader_grid_ocr">GridOCR</string>
+    <string name="reader_cell_ocr">CellOCR</string>
+    <string name="reader_hint_grid_ocr">First generation · residual CNN</string>
+    <string name="reader_hint_cell_ocr">Squeeze-excitation CNN · EMNIST handwriting</string>
+    <string name="reader_switching">Loading reader…</string>
 </resources>

@@ -79,6 +79,15 @@ def kt_remove_grid_lines(px: bytearray) -> None:
             for c in range(PATCH):
                 px[base + c] = 255
             removed_any = True
+
+    # Vertical grid lines: same test down each column, and like Python it does
+    # not affect whether the glyph is re-centred.
+    for col in range(PATCH):
+        dark = sum(1 for r in range(PATCH) if px[r * PATCH + col] < DARK)
+        if dark / PATCH > GRID_LINE_FRACTION:
+            for r in range(PATCH):
+                px[r * PATCH + col] = 255
+
     if not removed_any:
         return
 
@@ -102,10 +111,11 @@ def kt_remove_grid_lines(px: bytearray) -> None:
 
 def kt_prep_patch(patch: np.ndarray, low_contrast: bool) -> np.ndarray:
     px = bytearray(patch.reshape(-1).tolist())
+    # Mirrors CellPreprocessor.prepPatch: the low-contrast stretch falls through
+    # to grid-line removal, it does not replace it.
     if low_contrast:
         kt_stretch(px)
-    else:
-        kt_remove_grid_lines(px)
+    kt_remove_grid_lines(px)
     return np.frombuffer(bytes(px), dtype=np.uint8).reshape(PATCH, PATCH)
 
 

@@ -81,6 +81,29 @@ object ConstraintRecovery {
             candidates[i] = ranked.subList(1, 4).filter { row[it] >= MIN_ALT_PROB }.toIntArray()
         }
 
+        // Cells with direct constraint violations (same digit twice in a row/col/box).
+        // These are definitively wrong regardless of confidence and always enter the pool.
+        val violationCells = mutableSetOf<Int>()
+        val groups = buildList {
+            for (r in 0..8) add((0..8).map { r * 9 + it })           // rows
+            for (c in 0..8) add((0..8).map { it * 9 + c })           // cols
+            for (br in 0..2) for (bc in 0..2)
+                add((0..2).flatMap { dr -> (0..2).map { dc -> (br*3+dr)*9 + bc*3+dc } }) // boxes
+        }
+        for (group in groups) {
+            val seen = mutableMapOf<Int, Int>()
+            for (i in group) {
+                val v = puzzle[i]; if (v == 0) continue
+                val prev = seen[v]
+                if (prev != null) { violationCells += i; violationCells += prev } else seen[v] = i
+            }
+        }
+        // Ensure violation cells have 0 (empty) as a candidate to try.
+        for (i in violationCells) {
+            if (candidates[i] != null && 0 !in candidates[i]!!)
+                candidates[i] = intArrayOf(0) + candidates[i]!!
+        }
+
         // Threshold-based: any cell below UNCERTAIN_BELOW with alternatives.
         val uncertainThresh = (0 until SudokuSolver.CELLS)
             .filter { candidates[it]!!.isNotEmpty() && top1[it] < UNCERTAIN_BELOW }
@@ -96,7 +119,7 @@ object ConstraintRecovery {
         val nPct = maxOf(8, (digitCellsSorted.size * DIGIT_PCT).toInt())
         val uncertainPct = digitCellsSorted.take(nPct)
 
-        val uncertain = (uncertainThresh.toSet() + uncertainPct.toSet())
+        val uncertain = (uncertainThresh.toSet() + uncertainPct.toSet() + violationCells)
             .sortedBy { top1[it] }
             .take(MAX_UNCERTAIN)  // cap: search is combinatorial in this
 

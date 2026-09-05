@@ -131,13 +131,32 @@ class CellDetector(context: Context) : Closeable {
 }
 
 /**
- * Digit reader -- GridOCRNet, (81, 1, 50, 50) in, (81, 10) out.
+ * The digit readers that ship in the APK, mirroring `PIPELINE_PATHS` in the
+ * Python pipeline.
+ *
+ * Both take (81, 1, 70, 70) and return (81, 10), and both are fed by the same
+ * [CellPreprocessor], so they are interchangeable at this seam -- which is the
+ * point: switching between them compares the networks and nothing else.
+ *
+ * @property asset the TFLite file in `assets/`, written by scripts/export_tflite.py
+ * @property label what the picker shows
+ */
+enum class DigitModel(val asset: String, val label: String) {
+    /** First generation: plain residual CNN, trained with MNIST handwriting. */
+    GRID_OCR("gridocr.tflite", "GridOCR"),
+
+    /** Second generation: squeeze-excitation CNN, EMNIST handwriting, MNIST held out. */
+    CELL_OCR("cellocr.tflite", "CellOCR"),
+}
+
+/**
+ * Digit reader -- (81, 1, 70, 70) in, (81, 10) out.
  *
  * The batch is fixed at a whole grid, matching the Python pipeline's single
  * forward pass over all 81 cells.
  */
-class DigitReader(context: Context) : Closeable {
-    private val model = object : TfliteModel(context, "gridocr.tflite") {
+class DigitReader(context: Context, digitModel: DigitModel = DigitModel.CELL_OCR) : Closeable {
+    private val model = object : TfliteModel(context, digitModel.asset) {
         fun run(input: FloatArray): Array<FloatArray> {
             val inBuf = floatBuffer(input.size)
             inBuf.asFloatBuffer().put(input)

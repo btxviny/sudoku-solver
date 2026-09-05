@@ -112,7 +112,15 @@ object CellPreprocessor {
         val px = ByteArray(PATCH * PATCH)
         toGray(patch).get(0, 0, px)
 
-        if (lowContrast) stretch(px) else removeGridLines(px)
+        // Both steps, in this order, exactly as `cell_prep.prep_patch` does.
+        // The low-contrast branch *falls through* to grid-line removal rather
+        // than replacing it: stretching is what makes the grid-line pixels dark
+        // enough to be found in the first place.  Skipping the second step here
+        // left the device feeding the network patches it was never trained on,
+        // on every washed-out photo -- 3243 of 5103 patches differed from
+        // Python before this line was fixed (scripts/verify_kotlin_preprocess.py).
+        if (lowContrast) stretch(px)
+        removeGridLines(px)
 
         val out = Mat(PATCH, PATCH, CvType.CV_8UC1)
         out.put(0, 0, px)
@@ -122,9 +130,8 @@ object CellPreprocessor {
     /**
      * Low-contrast mode: stretch the patch to the full range.
      *
-     * Grid-line removal is deliberately skipped here -- with the tones
-     * compressed, the dark-pixel threshold cannot tell a grid line from a digit
-     * stroke, so removing "lines" would eat the digit.
+     * A patch with no spread at all carries nothing to read and is blanked, so
+     * the grid-line pass that follows finds nothing in it either.
      */
     private fun stretch(px: ByteArray) {
         var mn = 255
@@ -148,7 +155,7 @@ object CellPreprocessor {
     }
 
     /**
-     * Normal mode: strip full-width grid-line bars, then re-centre the glyph.
+     * Strip full-width grid-line bars, then re-centre the glyph.
      *
      * Re-centring is not cosmetic.  Removing border rows from the top or bottom
      * leaves the remaining digit sitting off-centre, which is not what the
@@ -167,6 +174,22 @@ object CellPreprocessor {
                 removedAny = true
             }
         }
+
+        // Vertical grid lines, the same test down each column.  These were
+        // missing from the port: a left- or right-hand border left standing
+        // reads to the network as part of the glyph, and only the *rows* pass
+        // decides whether the digit is re-centred, so the column pass changes
+        // the patch without changing that decision -- exactly as in Python.
+        for (col in 0 until PATCH) {
+            var dark = 0
+            for (row in 0 until PATCH) {
+                if ((px[row * PATCH + col].toInt() and 0xFF) < DARK) dark++
+            }
+            if (dark.toDouble() / PATCH > GRID_LINE_FRACTION) {
+                for (row in 0 until PATCH) px[row * PATCH + col] = 255.toByte()
+            }
+        }
+
         if (!removedAny) return
 
         var top = -1

@@ -45,8 +45,8 @@ Photo
          │
          ▼
 ┌─────────────────┐
-│   Digit OCR     │  GridOCRNet CNN [81,1,70,70] → [81,10] logits
-│                 │  87.8% cell accuracy; constraint recovery on failure
+│   Digit OCR     │  CellOCRNet CNN [81,1,70,70] → [81,10] logits
+│                 │  98.5% cell accuracy; constraint recovery on failure
 └────────┬────────┘
          │
          ▼
@@ -56,13 +56,25 @@ Photo
 └─────────────────┘
 ```
 
-### Accuracy (90 held-out real photos)
+### Digit readers
 
-| Stage | Rate |
-|-------|------|
-| Grid located | 44/45 (98%) |
-| Numbers in matrix | 33/45 (73%) |
-| End-to-end solve | ~78% |
+Two readers are installed and selectable everywhere — the Streamlit sidebar, `--path` on the CLI, and a picker in the Android app. **CellOCR is the default.**
+
+| | GridOCR (1st gen) | CellOCR (2nd gen) |
+|---|---|---|
+| Network | Residual CNN, 2.42 M params | Squeeze-excitation CNN, 2.01 M params |
+| Handwriting corpus | MNIST | EMNIST (MNIST held out) |
+| Trained on cleaned patches | no | yes |
+
+### Accuracy (40 held-out real photos, `data/wicht_sudoku/v2_test`)
+
+| Metric | GridOCR | CellOCR |
+|---|---|---|
+| Grids read perfectly | 13/40 (32.5%) | **38/40 (95.0%)** |
+| End-to-end solve | 30/40 (75.0%) | **38/40 (95.0%)** |
+| Cell accuracy | 96.08% | **98.52%** |
+
+On `half_mixed_test` (printed clues plus pasted handwriting) CellOCR reads 26/40 grids perfectly against GridOCR's 15/40 and solves 38/40 against 37/40. GridOCR scores higher on that set's *handwritten* cells only because they are the MNIST glyphs it trained on; see [`training/cell_ocr/README.md`](training/cell_ocr/README.md).
 
 Constraint recovery (runner-up logits, confidence thresholding) handles the gap between cell accuracy and end-to-end solve rate.
 
@@ -101,14 +113,18 @@ GPU delegate (LiteRT) on supported devices; multi-threaded CPU otherwise.
 │   ├── yolo_grid_detector.py   # YOLOv8n-seg/pose wrapper
 │   ├── yolo_cell_extractor.py  # YOLOv8n cell detector + lattice assignment
 │   ├── grid_geometry.py        # Perspective warp, corner fitting
-│   ├── grid_ocr.py             # GridOCRNet digit reader
+│   ├── digit_reader.py         # Reading protocol shared by both readers
+│   ├── cell_prep.py            # Patch cleanup (ported 1:1 to Kotlin)
+│   ├── grid_ocr.py             # GridOCRNet digit reader (1st gen)
+│   ├── cell_ocr.py             # CellOCRNet digit reader (2nd gen, default)
 │   ├── sudoku_solver.py        # MRV backtracking solver
 │   └── config.py               # Dataclass configuration
 ├── training/                   # One subdirectory per model (see training/README.md)
 │   ├── grid_seg/               # YOLOv8n-seg grid detector
 │   ├── grid_pose/              # YOLOv8n-pose grid detector
 │   ├── cell_extraction/        # YOLOv8n cell detector
-│   ├── grid_ocr/               # GridOCRNet CNN digit classifier
+│   ├── grid_ocr/               # GridOCRNet CNN digit classifier (1st gen)
+│   ├── cell_ocr/               # CellOCRNet SE-CNN digit classifier (2nd gen)
 │   └── digit_classification/   # YOLOv8n-cls digit classifier (alt)
 ├── android/                    # Android Studio project (Kotlin)
 │   └── app/src/main/java/com/sudokusolver/core/
@@ -153,6 +169,8 @@ uv run python scripts/verify_kotlin_preprocess.py # 5 103 patches: byte identity
 uv run python scripts/verify_kotlin_geometry.py   # corner order + lattice slots
 uv run python scripts/verify_kotlin_decoder.py    # YOLO decoding vs Ultralytics
 uv run python scripts/verify_tflite_pipeline.py   # end-to-end TFLite vs PyTorch
+uv run python scripts/verify_tflite.py            # both readers: TFLite vs PyTorch
+uv run python scripts/eval_wicht.py data/wicht_sudoku/v2_test   # score every reader
 uv run pytest tests/ -v
 ```
 

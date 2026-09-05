@@ -5,7 +5,8 @@
     uv run python train_all_models.py --steps grid_ocr cell_extraction
 
 Steps (run in this order):
-    grid_ocr          GridOCRNet CNN digit classifier (PyTorch, ~3 MB)
+    grid_ocr          GridOCRNet CNN digit classifier, 1st gen (PyTorch, ~9 MB)
+    cell_ocr          CellOCRNet SE-CNN digit classifier, 2nd gen (PyTorch, ~8 MB)
     cell_extraction   YOLOv8n cell detector - empty vs filled (YOLO, ~6 MB)
     grid_seg          YOLOv8n-seg grid locator (YOLO, ~13 MB)
     grid_pose         YOLOv8n-pose grid locator - 4 corners (YOLO, ~13 MB)
@@ -19,7 +20,7 @@ import sys
 import subprocess
 import argparse
 
-ALL_STEPS = ["grid_ocr", "cell_extraction", "grid_seg", "grid_pose", "digit_cls"]
+ALL_STEPS = ["grid_ocr", "cell_ocr", "cell_extraction", "grid_seg", "grid_pose", "digit_cls"]
 
 
 def _run(script: str, *extra_args: str) -> bool:
@@ -46,6 +47,22 @@ def train_grid_ocr(steps: list[str]) -> bool:
         "--synthetic_size", "60000",
         "--handwritten_size", "40000",
     )
+
+
+def train_cell_ocr(steps: list[str]) -> bool:
+    if "cell_ocr" not in steps:
+        return True
+    print("=" * 60)
+    print("STEP: CellOCRNet digit classifier (2nd generation)")
+    print("  Extracting real cells first...")
+    print("  Output: models/weights/cell_ocr_cnn.pth")
+    print("=" * 60)
+    # The real crops are cut by the grid and cell detectors, so this step needs
+    # their weights to exist -- which is why it runs after them in ALL_STEPS
+    # order only when the whole set is trained from nothing.
+    if not _run("training/cell_ocr/extract_real_cells.py"):
+        return False
+    return _run("training/cell_ocr/train.py", "--epochs", "40")
 
 
 def train_cell_extraction(steps: list[str]) -> bool:
@@ -115,6 +132,7 @@ def main():
 
     step_map = {
         "grid_ocr": ("GridOCRNet digit classifier", train_grid_ocr),
+        "cell_ocr": ("CellOCRNet digit classifier", train_cell_ocr),
         "cell_extraction": ("YOLOv8n cell extractor", train_cell_extraction),
         "grid_seg": ("YOLOv8n-seg grid locator", train_grid_seg),
         "grid_pose": ("YOLOv8n-pose grid locator", train_grid_pose),
